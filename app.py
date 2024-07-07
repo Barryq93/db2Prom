@@ -1,7 +1,7 @@
 import os
 import sys
-from db2dexpo.db2 import Db2Connection
-from db2dexpo.prometheus import CustomExporter, INVALID_LABEL_STR
+from db2Prom.db2 import Db2Connection
+from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR
 import yaml
 import logging
 from dotenv import load_dotenv
