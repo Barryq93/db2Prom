@@ -1,47 +1,43 @@
-# Db2DExpo
+# db2Prom
 
-> Dynamic Prometheus exporter for Db2 in Python
+> Dynamic Prometheus exporter for IBM Db2 in Python
 
-Db2DExpo is Prometheus exporter for Db2, fully configurable (both which metrics to export and which databases to connect) via YAML files.
+db2Prom is a Python-based tool designed for exporting metrics from IBM Db2 databases to Prometheus. It builds upon the foundation of db2dexpo by arapozojr, enhancing functionality and flexibility for monitoring Db2 instances.
 
-Write your own SQL queries, run them against one or more databases and create gauge metrics for them. This way, you can create metrics for both Db2 level monitoring (e.g. Bufferpool performance, hit ratio, database size, etc.) and your own database applications.
+## Overview
 
-For each query you can define multiple gauge metrics, one for each column from the SQL result set. It's also possible to create dynamic labels for the metrics (for instance, setting a label with bufferpool names).
+db2Prom allows users to define their own SQL queries, execute them against one or more Db2 databases, and create Prometheus gauge metrics based on the results. This enables comprehensive monitoring at both the Db2 system level (e.g., buffer pool performance, hit ratio) and application-specific database metrics.
 
-Each query for each database is run asynchronously. Time interval between runs is configurable in the YAML.
+Key features include:
 
-All the database connections are persistent. If during execution any database connection is dropped, the application will keep retrying connection (interval also configurable via variable).
+- **Customizable Queries**: Write SQL queries tailored to your monitoring needs.
+- **Dynamic Labeling**: Define dynamic labels for metrics based on query results.
+- **Asynchronous Execution**: Run multiple queries concurrently for optimal performance.
+- **Persistent Connections**: Automatically reconnect to databases if the connection is dropped.
+- **Configuration via YAML**: Easily configure which metrics to export and which databases to connect using YAML files.
 
-Check the example [config.yaml](config.example.yaml) for all configurations.
+## Running Locally
 
-## Running locally
+To run db2Prom locally, follow these steps:
 
-You need to have Python version 3.10.8 and pip installed.
+### Prerequisites
 
-Clone this repo:
+- Python 3.10.8 or higher
+- pip (Python package installer)
 
-```shell
-git clone https://github.com/arapozojr/db2dexpo.git
-cd db2dexpo/
+### Installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/Barryq93/db2Prom.git
+cd db2Prom
 ```
 
 Install all required packages using pip:
 
 ```shell
 pip3 install -r requirements.txt
-```
-
-Create .env file with at least the user and password that will be used for database connections:
-
-```shell
-cat << EOF > .env
-DB2DEXPO_USER=
-DB2DEXPO_PASSWD=
-DB2DEXPO_CONNECTIONS_FILE=config.yaml
-DB2DEXPO_QUERIES_FILE=config.yaml
-DB2DEXPO_LOG_LEVEL=INFO
-DB2DEXPO_RETRY_CONN_INTERVAL=60
-EOF
 ```
 
 Check [the example config YAML](config.example.yaml) on how to handle multiple databases with different access. Use this example YAML to also make your own config.yaml file, with your queries and gauge metrics.
@@ -78,18 +74,6 @@ git clone https://github.com/arapozojr/db2dexpo.git
 cd db2dexpo/
 ```
 
-Create .env file with at least the user and password that will be used for database connections:
-
-```shell
-cat << EOF > .env
-DB2DEXPO_USER=
-DB2DEXPO_PASSWD=
-DB2DEXPO_CONNECTIONS_FILE=config.yaml
-DB2DEXPO_QUERIES_FILE=config.yaml
-DB2DEXPO_LOG_LEVEL=INFO
-DB2DEXPO_RETRY_CONN_INTERVAL=60
-EOF
-```
 
 Check [the example config YAML](config.example.yaml) on how to handle multiple databases with different access. Use this example YAML to also make your own config.yaml file, with your queries and gauge metrics.
 
