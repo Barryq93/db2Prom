@@ -42,6 +42,8 @@ Key features include:
 - Updated `README.md` to reflect changes, installation instructions, and usage guidelines specific to `db2Prom`.
 - Added comprehensive examples and outputs to demonstrate usage scenarios, including Docker setup and metric visualization.
 
+Grateful to [arapozojr](https://github.com/arapozojr) for their initial work on `db2dexpo`, which served as the foundation for this project.
+
 ## Running Locally
 
 To run db2Prom locally, follow these steps:
