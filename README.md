@@ -16,6 +16,32 @@ Key features include:
 - **Persistent Connections**: Automatically reconnect to databases if the connection is dropped.
 - **Configuration via YAML**: Easily configure which metrics to export and which databases to connect using YAML files.
 
+# Changes from db2dexpo
+
+## Enhanced Logging and Error Handling
+
+- Improved logging messages throughout the application for better clarity and error reporting.
+- Added comprehensive error handling mechanisms to gracefully manage exceptions and errors.
+
+## Extended Metrics Export
+
+- Expanded the metrics export functionality to include additional database performance metrics beyond standard connections.
+- Introduced flexibility in defining and exporting metrics based on user-defined queries and configurations.
+
+## Configuration Flexibility
+
+- Enhanced configuration options via YAML files to provide more dynamic setup capabilities.
+- Users can now easily define and customize database connections, queries, and metrics through configurable YAML files.
+
+## Bug Fixes and Optimization
+
+- Optimized codebase for improved performance and reliability.
+
+## Documentation and Readme Updates
+
+- Updated `README.md` to reflect changes, installation instructions, and usage guidelines specific to `db2Prom`.
+- Added comprehensive examples and outputs to demonstrate usage scenarios, including Docker setup and metric visualization.
+
 ## Running Locally
 
 To run db2Prom locally, follow these steps:
