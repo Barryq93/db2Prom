@@ -4,7 +4,7 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-APPLICATION_NAME = "DB2DEXPO"
+APPLICATION_NAME = "DB2PROM"
 
 
 class Db2Connection:
@@ -56,3 +56,12 @@ class Db2Connection:
             logger.warning("[{}] [{}] failed to execute".format(
                 self.connection_string_print, name))
             return [[]]
+    
+    def close(self):
+        try:
+            if self.conn:
+                ibm_db.close(self.conn)
+                self.conn = None
+                logger.info("[{}] closed".format(self.connection_string_print))
+        except Exception as e:
+            logger.error("[{}] failed to close connection: {}".format(self.connection_string_print, e))
