@@ -2,8 +2,8 @@ global_config:
   log_level: INFO
   retry_conn_interval: 60
   default_time_interval: 15
-  log_path: "/path/to/logs/"
-  error_log_path: "/path/to/error_logs/"
+  log_path: "/d/Learning/Code/Python/db2Prom/logs/"
+  error_log_path: "/d/Learning/Code/Python/db2Prom/logs/"
   port: 9844
 
 queries:
@@ -56,11 +56,11 @@ queries:
           appname: "$3"
 
 connections:
-  - db_host: "production-hostname.private.dns"
-    db_name: "PRODDB1"
+  - db_host: "192.168.50.253"
+    db_name: "sample"
     db_port: 50000
-    db_user: "DB2_USER_PROD"
-    db_passwd: "DB2_PASSWD_PROD"
+    db_user: "DB2INST1"
+    db_passwd: "mypassword"
     tags: [production, proddb1]
     extra_labels:
       dbinstance: db2inst1

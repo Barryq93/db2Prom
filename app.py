@@ -8,7 +8,7 @@ import asyncio
 import re
 from logging.handlers import RotatingFileHandler
 from db2Prom.db2 import Db2Connection  # Assuming Db2Connection is defined in db2Prom.db2
-from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR, setup_logging  # Assuming these are defined in db2Prom.prometheus
+from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR  # Assuming these are defined in db2Prom.prometheus
 
 def setup_logging(log_path, error_log_path, log_level):
     # Create log directory if it doesn't exist
