@@ -10,30 +10,29 @@ from logging.handlers import RotatingFileHandler
 from db2Prom.db2 import Db2Connection  # Assuming Db2Connection is defined in db2Prom.db2
 from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR  # Assuming these are defined in db2Prom.prometheus
 
-def setup_logging(log_path, error_log_path, log_level):
+def setup_logging(log_path, log_level):
     # Create log directory if it doesn't exist
     os.makedirs(log_path, exist_ok=True)
-    os.makedirs(os.path.dirname(error_log_path), exist_ok=True)
 
     # Configure logger
     logger = logging.getLogger()
     logger.setLevel(log_level)
 
     # Main log handler (rotating file handler)
-    log_file = os.path.join(log_path, "db2promservice.log")
+    log_file = os.path.join(log_path, "db2prom.log")
     handler = RotatingFileHandler(log_file, maxBytes=10*1024*1024, backupCount=5)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-    # Error log handler (separate file)
-    error_handler = logging.FileHandler(error_log_path)
+    # Error log handler (rotating file handler)
+    error_log_file = os.path.join(log_path, "db2prom.err")
+    error_handler = RotatingFileHandler(error_log_file, maxBytes=10*1024*1024, backupCount=5)
     error_handler.setLevel(logging.ERROR)
-    error_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    error_handler.setFormatter(error_formatter)
+    error_handler.setFormatter(formatter)
     logger.addHandler(error_handler)
 
-def db2_instance_connection(config_connection: dict):
+def db2_instance_connection(config_connection):
     # Establishes a DB2 connection using provided configuration
     logging.info("Setting up DB2 connection with provided configuration.")
     conn = {
@@ -52,22 +51,22 @@ def db2_instance_connection(config_connection: dict):
 
     return Db2Connection(**conn)
 
-async def db2_keep_connection(db2_conn: Db2Connection, retry_time: int = 60):
+async def db2_keep_connection(db2_conn, retry_conn_interval=60):
     """
     Asynchronous function to maintain DB2 connection.
-    
-    Periodically attempts to keep the DB2 connection alive by reconnecting 
-    at specified intervals (retry_time seconds).
+
+    Periodically attempts to keep the DB2 connection alive by reconnecting
+    at specified intervals (retry_conn_interval seconds).
     """
-    logging.info(f"Starting DB2 connection keeper with retry interval {retry_time} seconds.")
+    logging.info(f"Starting DB2 connection keeper with retry interval {retry_conn_interval} seconds.")
     while True:
         try:
             db2_conn.connect()
         except Exception as e:
             logging.error(f"Error keeping DB2 connection: {e}")
-        await asyncio.sleep(retry_time)
+        await asyncio.sleep(retry_conn_interval)
 
-async def query_set(config_connection: dict, db2_conn: Db2Connection, config_query: dict, exporter: CustomExporter, default_time_interval: int):
+async def query_set(config_connection, db2_conn, config_query, exporter, default_time_interval):
     """
     Asynchronous function to execute queries and export metrics.
     
@@ -91,8 +90,10 @@ async def query_set(config_connection: dict, db2_conn: Db2Connection, config_que
                 "dbname": config_connection["db_name"],
             }
             if "extra_labels" in config_connection:
-                c_labels = c_labels | config_connection["extra_labels"]
-            c_labels = {i: INVALID_LABEL_STR for i in list(max_conn_labels)} | c_labels
+                c_labels.update(config_connection["extra_labels"])
+
+            max_conn_labels = {"dbhost", "dbenv", "dbname", "dbinstance", "dbport"}
+            c_labels = {i: INVALID_LABEL_STR for i in max_conn_labels} | c_labels
 
             # Execute query and export metrics
             res = db2_conn.execute(config_query["query"], config_query["name"])
@@ -131,11 +132,7 @@ async def query_set(config_connection: dict, db2_conn: Db2Connection, config_que
         finally:
             await asyncio.sleep(time_interval)
 
-#########################################
-# Load YAML config files
-#########################################
-
-def load_config_yaml(file_str: str):
+def load_config_yaml(file_str):
     # Loads and parses a YAML configuration file
     logging.info(f"Loading configuration file: {file_str}")
     try:
@@ -155,30 +152,21 @@ def load_config_yaml(file_str: str):
         logging.fatal(f"Could not open file {file_str}: {e}")
         sys.exit(1)
 
-#########################################
-# Get set of all connection labels
-#########################################
-
-def get_labels_list(config_connections: dict):
+def get_labels_list(config_connections):
     # Extracts a set of all unique connection labels
     max_conn_labels = set()
     for c in config_connections:
         if "extra_labels" in c:
             c_labels = c["extra_labels"]
         else:
-            c_labels = set()
+            c_labels = {}
         max_conn_labels |= set(c_labels)
     max_conn_labels.add("dbhost")
     max_conn_labels.add("dbport")
     max_conn_labels.add("dbname")
     return max_conn_labels
 
-#########################################
-# Start Prometheus Exporter
-# and initialize metrics
-#########################################
-
-def start_prometheus_exporter(config_queries: dict, max_conn_labels: list, port: int):
+def start_prometheus_exporter(config_queries, max_conn_labels, port):
     # Starts the Prometheus exporter and initializes metrics
     logging.info(f"Starting Prometheus exporter on port {port} and initializing metrics.")
     try:
@@ -187,7 +175,7 @@ def start_prometheus_exporter(config_queries: dict, max_conn_labels: list, port:
             if "gauges" not in q:
                 raise Exception(f"{q} is missing 'gauges' key")
             for g in q["gauges"]:
-                labels = g["extra_labels"].keys() if "extra_labels" in g else []
+                labels = g.get("extra_labels", {}).keys()
                 labels = list(max_conn_labels | set(labels))
                 name = g.get("name")
                 if not name:
@@ -200,16 +188,12 @@ def start_prometheus_exporter(config_queries: dict, max_conn_labels: list, port:
         logging.fatal(f"Could not start/init Prometheus Exporter server: {e}")
         raise e
 
-#########################################
-# Main function to coordinate tasks
-#########################################
-
-async def main(config_connection: dict, config_queries: dict, exporter: CustomExporter, default_time_interval: int, port: int):
+async def main(config_connection, config_queries, exporter, default_time_interval, port):
     # Main function to coordinate DB2 connection keep-alive and query execution
     executions = []
     try:
         db2_conn = db2_instance_connection(config_connection)
-        retry_connect_interval = config_connection["retry_conn_interval"]
+        retry_connect_interval = config_connection.get("retry_conn_interval", 60)
         executions.append(db2_keep_connection(db2_conn, retry_connect_interval))
 
         for q in config_queries:
@@ -235,19 +219,23 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if not args.config_file:
-        print("Error: Configuration file argument is missing.")
+        logging.error("Error: Configuration file argument is missing.")
         sys.exit(1)
 
     try:
         # Load global configuration from YAML file
-        global_config = load_config_yaml(args.config_file)["global_config"]
+        config = load_config_yaml(args.config_file)
+        logging.info(f"Loaded config: {config}")  # Logging loaded config
+        
+        global_config = config["global_config"]
         log_level = logging.getLevelName(global_config.get("log_level", "INFO"))
         log_path = global_config.get("log_path", "/path/to/logs/")
-        error_log_path = global_config.get("error_log_path", "/path/to/error_logs/")
         port = global_config.get("port", 9844)
-
+        retry_conn_interval = global_config.get("retry_conn_interval", 60)  # Default to 60 if not explicitly set
+        logging.info(f"Retry connection interval: {retry_conn_interval}")  # Logging retry connection interval
+        
         # Setup logging configuration
-        setup_logging(log_path, error_log_path, log_level)
+        setup_logging(log_path, log_level)
         logging.info("Configuration file loaded successfully.")
 
         # Validate global configuration variables
@@ -255,20 +243,21 @@ if __name__ == '__main__':
             if int(global_config.get(current_variable, 15)) < 1:
                 logging.fatal(f"Invalid value for {current_variable}")
                 sys.exit(2)
-
+        
         # Load YAML files for DB2 connections and queries
-        config_connections = load_config_yaml(global_config["config_connections"])
-        config_queries = load_config_yaml(global_config["config_queries"])
-
+        config_connections = config["connections"]
+        config_queries = config["queries"]
+        
         # Get set of all connection labels
         max_conn_labels = get_labels_list(config_connections)
-
+        logging.info(f"Max connection labels: {max_conn_labels}")  # Logging max connection labels
+        
         # Start Prometheus exporter and initialize metrics
         exporter = start_prometheus_exporter(config_queries, max_conn_labels, port)
-
+        
         # Setup signal handler for graceful shutdown
         signal.signal(signal.SIGINT, signal_handler)
-
+        
         # Start asyncio event loop and run main tasks
         try:
             loop = asyncio.get_event_loop()
@@ -278,6 +267,9 @@ if __name__ == '__main__':
             loop.run_until_complete(asyncio.gather(*tasks))
         except KeyboardInterrupt:
             logging.info("Received KeyboardInterrupt, shutting down.")
+    except KeyError as ke:
+        logging.critical(f"{ke.args[0]} not found in global_config. Check configuration.")
+        sys.exit(1)
     except Exception as e:
-        logging.fatal(f"Fatal error: {e}")
+        logging.critical(f"Error loading configuration: {e}. Check configuration.")
         sys.exit(1)

@@ -2,8 +2,7 @@ global_config:
   log_level: INFO
   retry_conn_interval: 60
   default_time_interval: 15
-  log_path: "/d/Learning/Code/Python/db2Prom/logs/"
-  error_log_path: "/d/Learning/Code/Python/db2Prom/logs/"
+  log_path: "logs/"
   port: 9844
 
 queries:
