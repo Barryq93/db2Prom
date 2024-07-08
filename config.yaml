@@ -1,0 +1,66 @@
+global_config:
+  log_level: INFO
+  retry_conn_interval: 60
+  default_time_interval: 15
+  log_path: "logs/"
+  port: 9844
+
+queries:
+  - name: "Lockwaits"
+    runs_on: ["production"]
+    time_interval: 10
+    query: |
+      select
+        count(*) count,
+        coalesce(max(LOCK_WAIT_ELAPSED_TIME), 0) max_time
+      from
+        SYSIBMADM.MON_LOCKWAITS
+    gauges:
+      - name: "db2_lockwaits_count"
+        desc: "Amount of lockwaits"
+        col: 1
+
+      - name: "db2_lockwaits_maxwait_seconds"
+        desc: "Maximum number of seconds apps are waiting to get lock"
+        col: 2
+        extra_labels:
+          time: "seconds"
+
+  - name: "Applications count"
+    runs_on: []
+    time_interval: 15
+    query: |
+      SELECT
+      count(*) as count,
+      workload_occurrence_state,
+      application_name
+      FROM TABLE(MON_GET_CONNECTION(cast(NULL as bigint), -1))
+      WHERE NOT REGEXP_LIKE(application_name, '^[0-9\.].*')
+      AND application_name <> 'DB2PROM'
+      GROUP BY application_name, workload_occurrence_state
+      UNION
+      SELECT
+      count(*) as count,
+      workload_occurrence_state,
+      'FEDERATION' as application_name
+      FROM TABLE(MON_GET_CONNECTION(cast(NULL as bigint), -1))
+      WHERE REGEXP_LIKE(application_name, '^[0-9\.].*')
+      GROUP BY workload_occurrence_state
+    gauges:
+      - name: "db2_applications_count"
+        desc: "Amount of applications connected per state"
+        col: 1
+        extra_labels:
+          appstate: "$2"
+          appname: "$3"
+
+connections:
+  - db_host: "192.168.50.253"
+    db_name: "sample"
+    db_port: 50000
+    db_user: "DB2INST1"
+    db_passwd: "mypassword"
+    tags: [production, proddb1]
+    extra_labels:
+      dbinstance: db2inst1
+      dbenv: production
