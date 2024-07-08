@@ -1,12 +1,22 @@
 from prometheus_client import start_http_server, Gauge
+from prometheus_client.exposition import BaseHTTPRequestHandler
 import logging
 import os
+import socketserver
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 INVALID_LABEL_STR = "-"
+
+# Custom HTTPRequestHandler class to log each request
+class LoggingHTTPRequestHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        logger.info("%s - - [%s] %s\n" % (
+            self.client_address[0],
+            self.log_date_time_string(),
+            format % args))
 
 # Custom Prometheus Exporter class
 class CustomExporter:
@@ -37,9 +47,17 @@ class CustomExporter:
 
     def start(self):
         try:
-            # Start HTTP server on specified port
-            start_http_server(self.port)
+            # Start HTTP server with custom LoggingHTTPRequestHandler
+            server = socketserver.TCPServer(('', self.port), LoggingHTTPRequestHandler)
             logger.info(f"Db2DExpo server started at port {self.port}")
+            server.serve_forever()
         except Exception as e:
             logger.fatal(f"Failed to start Db2DExpo server at port {self.port}: {e}")
             raise e
+
+# Example usage
+if __name__ == "__main__":
+    exporter = CustomExporter(port=9877)
+    exporter.create_gauge("example_metric", "This is an example metric")
+    exporter.set_gauge("example_metric", 1)
+    exporter.start()
