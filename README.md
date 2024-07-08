@@ -73,7 +73,7 @@ Check [the example config YAML](config.example.yaml) on how to handle multiple d
 Run the application:
 
 ```shell
-python3 app.py
+python app.py config.yaml
 ```
 
 Set DB2DEXPO_LOG_LEVEL to DEBUG to show query executions and metric updates.
