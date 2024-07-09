@@ -65,28 +65,6 @@ queries:
         desc: "Log utilization percentage"
         col: 1
 
-  - name: "Buffer Pool Hit Ratio"
-    runs_on: ["production"]
-    time_interval: 60
-    query: |
-      SELECT
-        BP_NAME,
-        POOL_DATA_HIT_RATIO_PERCENT,
-        POOL_INDEX_HIT_RATIO_PERCENT
-      FROM SYSIBMADM.BP_HITRATIO
-    gauges:
-      - name: "db2_buffer_pool_data_hit_ratio"
-        desc: "Buffer pool data hit ratio percentage"
-        col: 2
-        extra_labels:
-          bufferpool: "$1"
-          
-      - name: "db2_buffer_pool_index_hit_ratio"
-        desc: "Buffer pool index hit ratio percentage"
-        col: 3
-        extra_labels:
-          bufferpool: "$1"
-
   - name: "Active Connections"
     runs_on: ["production"]
     time_interval: 30
@@ -95,47 +73,6 @@ queries:
     gauges:
       - name: "db2_active_connections"
         desc: "Number of active connections"
-        col: 1
-
-  - name: "Locks and Deadlocks"
-    runs_on: ["production"]
-    time_interval: 30
-    query: |
-      SELECT
-        COUNT(*) AS lock_count,
-        SUM(CASE WHEN LOCK_MODE = 'X' THEN 1 ELSE 0 END) AS exclusive_locks
-      FROM SYSIBMADM.LOCKS
-    gauges:
-      - name: "db2_lock_count"
-        desc: "Number of locks"
-        col: 1
-        
-      - name: "db2_exclusive_locks"
-        desc: "Number of exclusive locks"
-        col: 2
-
-  - name: "Sort Overflows"
-    runs_on: ["production"]
-    time_interval: 60
-    query: |
-      SELECT
-        SORT_OVERFLOW_COUNT
-      FROM SYSIBMADM.SNAPDB
-    gauges:
-      - name: "db2_sort_overflow_count"
-        desc: "Number of sort overflows"
-        col: 1
-
-  - name: "Database Memory Usage"
-    runs_on: ["production"]
-    time_interval: 60
-    query: |
-      SELECT
-        DB_MEMORY_TOTAL
-      FROM SYSIBMADM.SNAPDB
-    gauges:
-      - name: "db2_memory_usage"
-        desc: "Total memory usage by the database"
         col: 1
 
   - name: "Tablespace Utilization"
@@ -159,22 +96,6 @@ queries:
         col: 3
         extra_labels:
           tablespace: "$1"
-
-  - name: "High CPU Usage Queries"
-    runs_on: ["production"]
-    time_interval: 60
-    query: |
-      SELECT
-        STMT_TEXT,
-        TOTAL_CPU_TIME
-      FROM SYSIBMADM.LONG_RUNNING_SQL
-      WHERE TOTAL_CPU_TIME > 1000000
-    gauges:
-      - name: "db2_high_cpu_queries"
-        desc: "CPU time for high CPU usage queries"
-        col: 2
-        extra_labels:
-          query: "$1"
 
   - name: "Transaction Log Usage"
     runs_on: ["production"]

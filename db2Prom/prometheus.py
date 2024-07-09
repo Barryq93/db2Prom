@@ -1,24 +1,12 @@
 from prometheus_client import start_http_server, Gauge
-from prometheus_client.exposition import MetricsHandler
 import logging
-import socketserver
-import http.server
+import os
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Custom MetricsHandler that logs each request
-class LoggingMetricsHandler(MetricsHandler):
-    def log_message(self, format, *args):
-        logger.info("%s - - [%s] %s\n" % (
-            self.client_address[0],
-            self.log_date_time_string(),
-            format % args))
-
-    def do_GET(self):
-        logger.info(f"Received GET request from {self.client_address}")
-        super().do_GET()
+INVALID_LABEL_STR = "-"
 
 # Custom Prometheus Exporter class
 class CustomExporter:
@@ -49,13 +37,9 @@ class CustomExporter:
 
     def start(self):
         try:
-            # Start HTTP server with custom LoggingMetricsHandler
-            start_http_server(self.port, handler_class=LoggingMetricsHandler)
-            logger.info(f"Prometheus HTTP server started at port {self.port}")
-            # Block indefinitely to keep the server running
-            socketserver.TCPServer.allow_reuse_address = True
-            socketserver.TCPServer(('localhost', self.port), LoggingMetricsHandler).serve_forever()
-
+            # Start HTTP server on specified port
+            start_http_server(self.port)
+            logger.info(f"Db2Prom server started at port {self.port}")
         except Exception as e:
-            logger.fatal(f"Failed to start Prometheus HTTP server at port {self.port}: {e}")
+            logger.fatal(f"Failed to start Db2Prom server at port {self.port}: {e}")
             raise e
