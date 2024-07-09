@@ -54,6 +54,66 @@ queries:
           appstate: "$2"
           appname: "$3"
 
+  - name: "Log Utilization"
+    runs_on: ["production"]
+    time_interval: 15
+    query: |
+      SELECT LOG_UTILIZATION_PERCENT
+      FROM SYSIBMADM.LOG_UTILIZATION
+    gauges:
+      - name: "db2_log_utilization_percent"
+        desc: "Log utilization percentage"
+        col: 1
+
+  - name: "Active Connections"
+    runs_on: ["production"]
+    time_interval: 30
+    query: |
+      SELECT COUNT(*) AS active_connections FROM SYSIBMADM.APPLICATIONS
+    gauges:
+      - name: "db2_active_connections"
+        desc: "Number of active connections"
+        col: 1
+
+  - name: "Tablespace Utilization"
+    runs_on: ["production"]
+    time_interval: 60
+    query: |
+      SELECT
+        TBSP_NAME,
+        TBSP_USED_SIZE_KB,
+        TBSP_TOTAL_SIZE_KB
+      FROM SYSIBMADM.TBSP_UTILIZATION
+    gauges:
+      - name: "db2_tablespace_used_size"
+        desc: "Used size of the tablespace in KB"
+        col: 2
+        extra_labels:
+          tablespace: "$1"
+          
+      - name: "db2_tablespace_total_size"
+        desc: "Total size of the tablespace in KB"
+        col: 3
+        extra_labels:
+          tablespace: "$1"
+
+  - name: "Transaction Log Usage"
+    runs_on: ["production"]
+    time_interval: 30
+    query: |
+      SELECT
+        TOTAL_LOG_USED_KB,
+        TOTAL_LOG_AVAILABLE_KB
+      FROM SYSIBMADM.LOG_UTILIZATION
+    gauges:
+      - name: "db2_total_log_used"
+        desc: "Total log space used in KB"
+        col: 1
+        
+      - name: "db2_total_log_available"
+        desc: "Total log space available in KB"
+        col: 2
+
 connections:
   - db_host: "192.168.50.253"
     db_name: "sample"

@@ -39,7 +39,7 @@ class CustomExporter:
         try:
             # Start HTTP server on specified port
             start_http_server(self.port)
-            logger.info(f"Db2DExpo server started at port {self.port}")
+            logger.info(f"Db2Prom server started at port {self.port}")
         except Exception as e:
-            logger.fatal(f"Failed to start Db2DExpo server at port {self.port}: {e}")
+            logger.fatal(f"Failed to start Db2Prom server at port {self.port}: {e}")
             raise e
