@@ -37,7 +37,7 @@ jobs:
 
     - name: Build executable with PyInstaller
       run: |
-        pyinstaller --onefile db2prom/app.py
+        pyinstaller --onefile app.py
         # The executable will be located in the 'dist' directory
 
     - name: Upload artifact
