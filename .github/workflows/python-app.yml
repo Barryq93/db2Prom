@@ -40,8 +40,27 @@ jobs:
         pyinstaller --onefile app.py
         # The executable will be located in the 'dist' directory
 
+    - name: List directory contents (for debugging)
+      run: |
+        ls -la
+        ls -la dist
+
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
         name: db2prom-executable
-        path: dist/db2prom
+        path: dist/app
+
+  download:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: db2prom-executable
+
+    - name: List downloaded artifact contents
+      run: |
+        ls -la
+        ls -la dist
