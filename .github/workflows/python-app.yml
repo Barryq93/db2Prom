@@ -1,4 +1,4 @@
-name: Python application
+name: Build Unix Executable
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pytest
+        pip install flake8 pytest PyInstaller
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
     - name: Lint with flake8
@@ -35,10 +35,13 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-    - name: Test with pytest
+    - name: Build executable with PyInstaller
       run: |
-        pytest
+        pyinstaller --onefile db2prom/db2prom.py
+        # The executable will be located in the 'dist' directory
 
-    - name: Notify if the job failed
-      if: failure()
-      run: echo "The build failed. Check the logs for details."
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: db2prom-executable
+        path: dist/db2prom
