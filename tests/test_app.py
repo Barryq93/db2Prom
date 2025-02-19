@@ -19,7 +19,8 @@ class TestApp(unittest.TestCase):
         mock_get_logger.return_value = mock_logger
 
         # Mock the RotatingFileHandler to avoid actual file creation
-        mock_rotating_file_handler.return_value = MagicMock()
+        mock_handler = MagicMock()
+        mock_rotating_file_handler.return_value = mock_handler
 
         # Call the function
         setup_logging("/fake/log/path", "INFO")
@@ -46,6 +47,9 @@ class TestApp(unittest.TestCase):
         # Mock the Db2Connection class
         mock_db2_connection.return_value = MagicMock()
 
+        # Mock the exporter
+        mock_exporter = MagicMock()
+
         # Test data
         config_connection = {
             "db_name": "test_db",
@@ -56,7 +60,7 @@ class TestApp(unittest.TestCase):
         }
 
         # Call the function
-        db2_instance_connection(config_connection)
+        db2_instance_connection(config_connection, mock_exporter)
 
         # Verify Db2Connection was called with the correct arguments
         mock_db2_connection.assert_called_once_with(
@@ -64,7 +68,8 @@ class TestApp(unittest.TestCase):
             db_hostname="localhost",
             db_port="50000",
             db_user="user",
-            db_passwd="pass"
+            db_passwd="pass",
+            exporter=mock_exporter  # Pass the exporter
         )
 
     def test_load_config_yaml(self):

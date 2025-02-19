@@ -7,10 +7,13 @@ import logging
 import asyncio
 import re
 from logging.handlers import RotatingFileHandler
-from db2Prom.db2 import Db2Connection  # Assuming Db2Connection is defined in db2Prom.db2
-from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR  # Assuming these are defined in db2Prom.prometheus
+from db2Prom.db2 import Db2Connection
+from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR
 
 def setup_logging(log_path, log_level):
+    """
+    Set up logging with rotating file handlers.
+    """
     # Create log directory if it doesn't exist
     os.makedirs(log_path, exist_ok=True)
 
@@ -32,20 +35,23 @@ def setup_logging(log_path, log_level):
     error_handler.setFormatter(formatter)
     logger.addHandler(error_handler)
 
-def db2_instance_connection(config_connection):
-    # Establishes a DB2 connection using provided configuration
+def db2_instance_connection(config_connection, exporter):
+    """
+    Establishes a DB2 connection using provided configuration.
+    """
     logging.info("Setting up DB2 connection with provided configuration.")
     conn = {
         "db_name": config_connection["db_name"],
         "db_hostname": config_connection["db_host"],
         "db_port": config_connection["db_port"],
         "db_user": config_connection["db_user"],
-        "db_passwd": config_connection["db_passwd"]
+        "db_passwd": config_connection["db_passwd"],
+        "exporter": exporter  # Pass the exporter to Db2Connection for emitting metrics
     }
 
     # Validate connection parameters
     for key, value in conn.items():
-        if not value:
+        if not value and key != "exporter":  # Exclude exporter from validation
             logging.fatal(f"Missing {key} field for connection.")
             sys.exit(1)
 
@@ -54,9 +60,6 @@ def db2_instance_connection(config_connection):
 async def db2_keep_connection(db2_conn, retry_conn_interval=60):
     """
     Asynchronous function to maintain DB2 connection.
-
-    Periodically attempts to keep the DB2 connection alive by reconnecting
-    at specified intervals (retry_conn_interval seconds).
     """
     logging.info(f"Starting DB2 connection keeper with retry interval {retry_conn_interval} seconds.")
     while True:
@@ -69,10 +72,6 @@ async def db2_keep_connection(db2_conn, retry_conn_interval=60):
 async def query_set(config_connection, db2_conn, config_query, exporter, default_time_interval):
     """
     Asynchronous function to execute queries and export metrics.
-    
-    Executes a set of queries defined in config_query at specified intervals 
-    (default_time_interval seconds). Ensures DB2 connection is re-established 
-    before each query execution and exports metrics using the provided exporter.
     """
     logging.info(f"Starting query set for: {config_query['name']} with interval {config_query.get('time_interval', default_time_interval)} seconds.")
     time_interval = config_query.get("time_interval", default_time_interval)
@@ -133,7 +132,9 @@ async def query_set(config_connection, db2_conn, config_query, exporter, default
             await asyncio.sleep(time_interval)
 
 def load_config_yaml(file_str):
-    # Loads and parses a YAML configuration file
+    """
+    Loads and parses a YAML configuration file.
+    """
     logging.info(f"Loading configuration file: {file_str}")
     try:
         with open(file_str, "r") as f:
@@ -153,7 +154,9 @@ def load_config_yaml(file_str):
         sys.exit(1)
 
 def get_labels_list(config_connections):
-    # Extracts a set of all unique connection labels
+    """
+    Extracts a set of all unique connection labels.
+    """
     max_conn_labels = set()
     for c in config_connections:
         if "extra_labels" in c:
@@ -167,7 +170,9 @@ def get_labels_list(config_connections):
     return max_conn_labels
 
 def start_prometheus_exporter(config_queries, max_conn_labels, port):
-    # Starts the Prometheus exporter and initializes metrics
+    """
+    Starts the Prometheus exporter and initializes metrics.
+    """
     logging.info(f"Starting Prometheus exporter on port {port} and initializing metrics.")
     try:
         custom_exporter = CustomExporter(port=port)
@@ -189,10 +194,12 @@ def start_prometheus_exporter(config_queries, max_conn_labels, port):
         raise e
 
 async def main(config_connection, config_queries, exporter, default_time_interval, port):
-    # Main function to coordinate DB2 connection keep-alive and query execution
+    """
+    Main function to coordinate DB2 connection keep-alive and query execution.
+    """
     executions = []
     try:
-        db2_conn = db2_instance_connection(config_connection)
+        db2_conn = db2_instance_connection(config_connection, exporter)  # Pass exporter to db2_instance_connection
         retry_connect_interval = config_connection.get("retry_conn_interval", 60)
         executions.append(db2_keep_connection(db2_conn, retry_connect_interval))
 
@@ -207,7 +214,9 @@ async def main(config_connection, config_queries, exporter, default_time_interva
         return None
 
 def signal_handler(sig, frame):
-    # Handles termination signals (e.g., Ctrl+C) gracefully
+    """
+    Handles termination signals (e.g., Ctrl+C) gracefully.
+    """
     logging.info("Received termination signal, shutting down gracefully.")
     loop.stop()
     sys.exit(0)
