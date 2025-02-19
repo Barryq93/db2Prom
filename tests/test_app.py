@@ -1,0 +1,94 @@
+import unittest
+from unittest.mock import patch, MagicMock, mock_open
+import os
+import logging
+from app import setup_logging, db2_instance_connection, load_config_yaml
+from db2Prom.db2 import Db2Connection
+
+class TestApp(unittest.TestCase):
+
+    @patch('os.makedirs')
+    @patch('logging.handlers.RotatingFileHandler')
+    @patch('logging.getLogger')
+    def test_setup_logging(self, mock_get_logger, mock_rotating_file_handler, mock_makedirs):
+        """
+        Test that logging is set up correctly.
+        """
+        # Mock the logger and file system operations
+        mock_logger = MagicMock()
+        mock_get_logger.return_value = mock_logger
+
+        # Mock the RotatingFileHandler to avoid actual file creation
+        mock_rotating_file_handler.return_value = MagicMock()
+
+        # Call the function
+        setup_logging("/fake/log/path", "INFO")
+
+        # Verify the directory was created
+        mock_makedirs.assert_called_once_with("/fake/log/path", exist_ok=True)
+
+        # Verify the RotatingFileHandler was called with the correct paths
+        mock_rotating_file_handler.assert_any_call(
+            "/fake/log/path/db2prom.log", maxBytes=10 * 1024 * 1024, backupCount=5
+        )
+        mock_rotating_file_handler.assert_any_call(
+            "/fake/log/path/db2prom.err", maxBytes=10 * 1024 * 1024, backupCount=5
+        )
+
+        # Verify the handlers were added to the logger
+        self.assertEqual(mock_logger.addHandler.call_count, 2)  # Main log handler and error log handler
+
+    @patch('app.Db2Connection')
+    def test_db2_instance_connection(self, mock_db2_connection):
+        """
+        Test that a DB2 connection is created with the correct parameters.
+        """
+        # Mock the Db2Connection class
+        mock_db2_connection.return_value = MagicMock()
+
+        # Test data
+        config_connection = {
+            "db_name": "test_db",
+            "db_host": "localhost",
+            "db_port": "50000",
+            "db_user": "user",
+            "db_passwd": "pass"
+        }
+
+        # Call the function
+        db2_instance_connection(config_connection)
+
+        # Verify Db2Connection was called with the correct arguments
+        mock_db2_connection.assert_called_once_with(
+            db_name="test_db",
+            db_hostname="localhost",
+            db_port="50000",
+            db_user="user",
+            db_passwd="pass"
+        )
+
+    def test_load_config_yaml(self):
+        """
+        Test that the YAML configuration file is loaded correctly.
+        """
+        # Mock the YAML file content
+        yaml_content = """
+        global_config:
+          log_level: INFO
+          retry_conn_interval: 60
+          default_time_interval: 15
+          log_path: "logs/"
+          port: 9844
+        """
+
+        # Mock the file open function
+        with patch('builtins.open', mock_open(read_data=yaml_content)):
+            config = load_config_yaml("fake_config.yaml")
+
+            # Verify the configuration was loaded correctly
+            self.assertEqual(config["global_config"]["log_level"], "INFO")
+            self.assertEqual(config["global_config"]["retry_conn_interval"], 60)
+            self.assertEqual(config["global_config"]["default_time_interval"], 15)
+
+if __name__ == '__main__':
+    unittest.main()

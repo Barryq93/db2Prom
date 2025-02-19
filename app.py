@@ -121,7 +121,7 @@ async def query_set(config_connection, db2_conn, config_query, exporter, default
                     for row in res:
                         g_labels_aux = g_labels.copy()
                         for k, v in g_labels_aux.items():
-                            g_label_index = int(re.match('^\$(\d+)$', v).group(1)) - 1 if re.match('^\$(\d+)$', v) else 0
+                            g_label_index = int(re.match(r'^\$(\d+)$', v).group(1)) - 1 if re.match(r'^\$(\d+)$', v) else 0
                             g_labels_aux[k] = row[g_label_index] if row and len(row) >= g_label_index else INVALID_LABEL_STR
                         labels = g_labels_aux | c_labels
                         if row and len(row) >= col:

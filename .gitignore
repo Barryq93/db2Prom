@@ -1,6 +1,6 @@
 .env*
 .venv
-
+.vscode
 *.yaml
 !config.example.yaml
 

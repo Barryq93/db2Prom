@@ -1,3 +1,5 @@
+import os
+os.add_dll_directory("D:\\Learning\\Code\\Python\\db2Prom\\.venv\\Lib\\site-packages\\clidriver\\bin")
 import ibm_db
 import logging
 import sys
