@@ -5,6 +5,7 @@
 db2Prom is a Python-based tool designed for exporting metrics from IBM Db2 databases to Prometheus. It builds upon the foundation of db2dexpo by arapozojr, enhancing functionality and flexibility for monitoring Db2 instances.
 
 ## Overview
+
 db2Prom allows users to define their own SQL queries, execute them against one or more Db2 databases, and create Prometheus gauge metrics based on the results. This enables comprehensive monitoring at both the Db2 system level (e.g., buffer pool performance, hit ratio) and application-specific database metrics.
 
 Key features include:
@@ -19,6 +20,7 @@ Key features include:
 # Changes from db2dexpo
 
 ## Enhanced Logging and Error Handling
+
 - Improved logging messages throughout the application for better clarity and error reporting.
 - Added comprehensive error handling mechanisms to gracefully manage exceptions and errors.
 
@@ -40,6 +42,7 @@ Added a new metric (db2_connection_status) to monitor database reachability.
 - Improved handling of database connection failures.
 
 ## Documentation and Readme Updates
+
 - Updated README.md to reflect changes, installation instructions, and usage guidelines specific to db2Prom.
 - Added comprehensive examples and outputs to demonstrate usage scenarios, including Docker setup and metric visualization.
 - Added instructions for building the application locally using PyInstaller.
@@ -56,6 +59,7 @@ To run db2Prom locally, follow these steps:
 - pip (Python package installer)
 
 ## Installation
+
 Clone the repository:
 
 ```bash
@@ -76,6 +80,7 @@ Run the application:
 ```shell
 python app.py config.yaml
 ```
+
 Set DB2DEXPO_LOG_LEVEL to DEBUG to show query executions and metric updates.
 
 Example output of application startup:
@@ -88,11 +93,13 @@ Example output of application startup:
 2023-01-07 10:24:16,860 - db2dexpo.prometheus - INFO - Db2DExpo server started at port 9877
 2023-01-07 10:24:17,232 - db2dexpo.db2 - INFO - [127.0.0.1:50000/sample] connected
 ```
+
 You can then open http://localhost:9877/ and see the exported metrics.
 
 Ctrl+c will stop the application.
 
 ## Building the Application Locally
+
 To build the application into a single executable using PyInstaller, follow these steps:
 
 Prerequisites
@@ -100,6 +107,7 @@ Python 3.10.8 or higher
 pip (Python package installer)
 
 ### Installation
+
 Install PyInstaller:
 
 ```bash
@@ -107,6 +115,7 @@ pip install pyinstaller
 ```
 
 ### Build the Executable
+
 Navigate to your project directory and run the following command:
 
 ```bash
@@ -119,16 +128,19 @@ Run the Executable
 Navigate to the dist/ directory and run the executable:
 
 On Windows:
+
 ```bash
 cd dist
 app.exe
 ```
 
 On macOS/Linux:
+
 ``` bash
 cd dist
 ./app
 ```
+
 Advanced Options
 Here are some additional PyInstaller options you might find useful:
 
@@ -141,18 +153,17 @@ Option	Description
 --clean	Clean the build directory before building.
 --debug	Build the executable in debug mode.
 Example with advanced options:
-```
-
-```bash
 pyinstaller --onefile --name=myapp --icon=app.ico --windowed --clean app.py
 ```
+
 ## Running in Docker
 
 Clone this repo:
 
 ```shell
 git clone https://github.com/Barryq93/db2Prom.git
-```cd db2Prom/
+cd db2Prom/
+```
 
 Check the example config YAML on how to handle multiple databases with different access. Use this example YAML to also make your own config.yaml file, with your queries and gauge metrics.
 
@@ -167,11 +178,13 @@ Run a container:
 ```shell
 docker run --name db2prompy -it --env-file .env db2prompy
 ```
+
 See the exported metrics:
 
 ```shell
 docker exec -it db2prompy curl 127.0.0.1:9877
 ```
+
 Example output:
 
 ``` text
