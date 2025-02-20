@@ -3,7 +3,9 @@
 .vscode
 *.yaml
 !config.example.yaml
-
+build/
+dist/
+app.spec
 __pycache__/
 *.py[cod]
 *$py.class
