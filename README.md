@@ -1,90 +1,153 @@
+---
+
 # db2Prom
 
 > Dynamic Prometheus exporter for IBM Db2 in Python
 
-db2Prom is a Python-based tool designed for exporting metrics from IBM Db2 databases to Prometheus. It builds upon the foundation of db2dexpo by arapozojr, enhancing functionality and flexibility for monitoring Db2 instances.
+`db2Prom` is a Python-based tool designed for exporting metrics from IBM Db2 databases to Prometheus. It builds upon the foundation of [`db2dexpo`](https://github.com/arapozojr/db2dexpo) by [arapozojr](https://github.com/arapozojr), enhancing functionality and flexibility for monitoring Db2 instances.
+
+---
+
+## Table of Contents
+1. [Overview](#overview)
+2. [Key Features](#key-features)
+3. [Changes from db2dexpo](#changes-from-db2dexpo)
+4. [Installation](#installation)
+5. [Configuration](#configuration)
+6. [Running Locally](#running-locally)
+7. [Running in Docker](#running-in-docker)
+8. [Building an Executable with PyInstaller](#building-an-executable-with-pyinstaller)
+9. [Testing](#testing)
+10. [Contributing](#contributing)
+11. [License](#license)
+12. [Acknowledgments](#acknowledgments)
+
+---
 
 ## Overview
 
-db2Prom allows users to define their own SQL queries, execute them against one or more Db2 databases, and create Prometheus gauge metrics based on the results. This enables comprehensive monitoring at both the Db2 system level (e.g., buffer pool performance, hit ratio) and application-specific database metrics.
+`db2Prom` allows users to define their own SQL queries, execute them against one or more Db2 databases, and create Prometheus gauge metrics based on the results. This enables comprehensive monitoring at both the Db2 system level (e.g., buffer pool performance, hit ratio) and application-specific database metrics.
 
-Key features include:
+---
+
+## Key Features
 
 - **Customizable Queries**: Write SQL queries tailored to your monitoring needs.
 - **Dynamic Labeling**: Define dynamic labels for metrics based on query results.
 - **Asynchronous Execution**: Run multiple queries concurrently for optimal performance.
 - **Persistent Connections**: Automatically reconnect to databases if the connection is dropped.
 - **Configuration via YAML**: Easily configure which metrics to export and which databases to connect using YAML files.
-- **Database Reachability Monitoring**: Added a new metric (db2_connection_status) to track whether the database is reachable (1 = reachable, 0 = unreachable).
+- **Enhanced Logging**: Improved logging messages for better clarity and error reporting.
+- **Comprehensive Error Handling**: Gracefully manage exceptions and errors.
 
-# Changes from db2dexpo
+---
 
-## Enhanced Logging and Error Handling
+## Changes from db2dexpo
 
-- Improved logging messages throughout the application for better clarity and error reporting.
-- Added comprehensive error handling mechanisms to gracefully manage exceptions and errors.
+`db2Prom` builds upon the original `db2dexpo` project by [arapozojr](https://github.com/arapozojr) with the following enhancements:
 
-## Extended Metrics Export
+- **Extended Metrics Export**: Added support for additional database performance metrics beyond standard connections.
+- **Configuration Flexibility**: Enhanced configuration options via YAML files for dynamic setup capabilities.
+- **Bug Fixes and Optimization**: Improved performance and reliability.
+- **Documentation Updates**: Updated `README.md` with detailed installation instructions, usage guidelines, and examples.
 
-- Expanded the metrics export functionality to include additional database performance metrics beyond standard connections.
-- Introduced flexibility in defining and exporting metrics based on user-defined queries and configurations.
-Added a new metric (db2_connection_status) to monitor database reachability.
-
-## Configuration Flexibility
-
-- Enhanced configuration options via YAML files to provide more dynamic setup capabilities.
-- Users can now easily define and customize database connections, queries, and metrics through configurable YAML files.
-
-## Bug Fixes and Optimization
-
-- Optimized codebase for improved performance and reliability.
-- Fixed issues with non-UTF-8 characters in the codebase.
-- Improved handling of database connection failures.
-
-## Documentation and Readme Updates
-
-- Updated README.md to reflect changes, installation instructions, and usage guidelines specific to db2Prom.
-- Added comprehensive examples and outputs to demonstrate usage scenarios, including Docker setup and metric visualization.
-- Added instructions for building the application locally using PyInstaller.
-
-Grateful to arapozojr for their initial work on db2dexpo, which served as the foundation for this project.
-
-## Running Locally
-
-To run db2Prom locally, follow these steps:
-
-### Prerequisites
-
-- Python 3.10.8 or higher
-- pip (Python package installer)
+---
 
 ## Installation
 
-Clone the repository:
+### Prerequisites
+- Python 3.10.8 or higher.
+- `pip` (Python package installer).
+- IBM Db2 client libraries.
 
-```bash
-git clone https://github.com/Barryq93/db2Prom.git
-cd db2Prom
+### Steps
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Barryq93/db2Prom.git
+   cd db2Prom
+   ```
+
+2. Install the required Python packages:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Install IBM Db2 client libraries:
+   - Follow the [IBM Db2 documentation](https://www.ibm.com/docs/en/db2/11.5?topic=clients-db2-client) to set up the Db2 client.
+
+---
+
+## Configuration
+
+The application is configured using a `config.yaml` file. Here’s an example configuration:
+
+```yaml
+global_config:
+  log_level: INFO
+  retry_conn_interval: 60
+  default_time_interval: 15
+  log_path: "logs/"
+  port: 9877
+
+queries:
+  - name: "applications_count"
+    runs_on: ["production"]
+    time_interval: 10
+    query: |
+      SELECT COUNT(*) FROM sysibmadm.applications
+    gauges:
+      - name: "db2_applications_count"
+        desc: "Amount of applications connected and their states"
+        col: 1
+
+connections:
+  - db_host: "127.0.0.1"
+    db_name: "sample"
+    db_port: 50000
+    db_user: "db2inst1"
+    db_passwd: "password"
+    tags: [production, proddb1]
+    extra_labels:
+      dbinstance: db2inst1
+      dbenv: production
 ```
 
-Install all required packages using pip:
+### Configuration Fields
+- **`global_config`**:
+  - `log_level`: Logging level (e.g., INFO, DEBUG).
+  - `retry_conn_interval`: Interval (in seconds) to retry Db2 connection.
+  - `default_time_interval`: Default interval (in seconds) for query execution.
+  - `log_path`: Directory to store log files.
+  - `port`: Port for the Prometheus HTTP server.
 
-```shell
-pip3 install -r requirements.txt
-```
+- **`queries`**:
+  - `name`: Name of the query.
+  - `query`: SQL query to execute.
+  - `gauges`: List of Prometheus gauges to create from the query results.
+    - `name`: Name of the gauge.
+    - `desc`: Description of the gauge.
+    - `col`: Column index in the query result to use as the gauge value.
 
-Check the example config YAML on how to handle multiple databases with different access. Use this example YAML to also make your own config.yaml file, with your queries and gauge metrics.
+- **`connections`**:
+  - `db_host`: Db2 database host.
+  - `db_name`: Db2 database name.
+  - `db_port`: Db2 database port.
+  - `db_user`: Db2 database user.
+  - `db_passwd`: Db2 database password.
+  - `extra_labels`: Additional labels to attach to Prometheus metrics.
 
-Run the application:
+---
 
-```shell
-python app.py config.yaml
-```
+## Running Locally
 
-Set DB2DEXPO_LOG_LEVEL to DEBUG to show query executions and metric updates.
+1. Ensure the `config.yaml` file is properly configured.
+2. Run the application:
+   ```bash
+   python app.py config.yaml
+   ```
+3. The Prometheus metrics will be available at `http://localhost:9877/metrics`.
 
 Example output of application startup:
-
 ```text
 2023-01-07 10:24:16,858 - db2dexpo.prometheus - INFO - [GAUGE] [db2_applications_count] created
 2023-01-07 10:24:16,859 - db2dexpo.prometheus - INFO - [GAUGE] [db2_lockwaits_count] created
@@ -94,113 +157,88 @@ Example output of application startup:
 2023-01-07 10:24:17,232 - db2dexpo.db2 - INFO - [127.0.0.1:50000/sample] connected
 ```
 
-You can then open http://localhost:9877/ and see the exported metrics.
-
-Ctrl+c will stop the application.
-
-## Building the Application Locally
-
-To build the application into a single executable using PyInstaller, follow these steps:
-
-Prerequisites
-Python 3.10.8 or higher
-pip (Python package installer)
-
-### Installation
-
-Install PyInstaller:
-
-```bash
-pip install pyinstaller
-```
-
-### Build the Executable
-
-Navigate to your project directory and run the following command:
-
-```bash
-pyinstaller --onefile app.py
-```
-
-This will create a single executable file in the dist/ directory.
-
-Run the Executable
-Navigate to the dist/ directory and run the executable:
-
-On Windows:
-
-```bash
-cd dist
-app.exe
-```
-
-On macOS/Linux:
-
-``` bash
-cd dist
-./app
-```
-
-Advanced Options
-Here are some additional PyInstaller options you might find useful:
-
-``` Text
-Option	Description
---name=<name>	Specify the name of the executable (default: same as the script name).
---icon=<icon.ico>	Add an icon to the executable (Windows only).
---windowed	Build a GUI application without a console window (Windows/macOS).
---add-data=<src;dest>	Include additional files or directories in the build.
---clean	Clean the build directory before building.
---debug	Build the executable in debug mode.
-Example with advanced options:
-pyinstaller --onefile --name=myapp --icon=app.ico --windowed --clean app.py
-```
+---
 
 ## Running in Docker
 
-Clone this repo:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Barryq93/db2Prom.git
+   cd db2Prom
+   ```
 
-```shell
-git clone https://github.com/Barryq93/db2Prom.git
-cd db2Prom/
-```
+2. Build the Docker image:
+   ```bash
+   docker build -t db2prompy .
+   ```
 
-Check the example config YAML on how to handle multiple databases with different access. Use this example YAML to also make your own config.yaml file, with your queries and gauge metrics.
+3. Run the container:
+   ```bash
+   docker run --name db2prom -it --env-file .env db2prompy
+   ```
 
-Build Docker image:
+4. View the exported metrics:
+   ```bash
+   docker exec -it db2prom curl 127.0.0.1:9877
+   ```
 
-```shell
-docker build -t db2prompy .
-```
+---
 
-Run a container:
+## Building an Executable with PyInstaller
 
-```shell
-docker run --name db2prompy -it --env-file .env db2prompy
-```
+To create a standalone executable for easier deployment:
 
-See the exported metrics:
+1. Install PyInstaller:
+   ```bash
+   pip install pyinstaller
+   ```
 
-```shell
-docker exec -it db2prompy curl 127.0.0.1:9877
-```
+2. Build the executable:
+   ```bash
+   pyinstaller --onefile app.py
+   ```
 
-Example output:
+3. The executable will be located in the `dist` directory. Run it like this:
+   ```bash
+   ./dist/app config.yaml
+   ```
 
-``` text
-...
-# HELP db2_applications_count Amount of applications connected and their states
-# TYPE db2_applications_count gauge
-db2_applications_count{appname="myapp",appstate="UOWWAIT",db2instance="db2inst1",dbhost="127.0.0.1",dbname="sample",dbport="50000",dbenv="test"} 5.0
-db2_applications_count{appname="myapp",appstate="UOWEXEC",db2instance="db2inst1",dbhost="127.0.0.1",dbname="sample",dbport="50000",dbenv="test"} 2.0
-db2_applications_count{appname="db2bp",appstate="UOWEXEC",db2instance="db2inst1",dbhost="127.0.0.1",dbname="sample",dbport="50000",dbenv="test"} 1.0
-# HELP db2_lockwaits_count Amount of lockwaits
-# TYPE db2_lockwaits_count gauge
-db2_lockwaits_count{db2instance="db2inst1",dbhost="127.0.0.1",dbname="sample",dbport="50000",dbenv="test"} 0.0
-# HELP db2_lockwaits_maxwait_seconds Maximum number of seconds apps are waiting to get lock
-# TYPE db2_lockwaits_maxwait_seconds gauge
-db2_lockwaits_maxwait_seconds{db2instance="db2inst1",dbhost="127.0.0.1",dbname="sample",dbport="50000",dbenv="test"} 0.0
-# HELP db2_employees_created Number of employees
-# TYPE db2_employees_created gauge
-db2_employees_created{db2instance="db2inst1",dbhost="127.0.0.1",dbname="sample",dbport="50000",dbenv="test",persontype="employee"} 1442.0
-```
+---
+
+## Testing
+
+The project includes unit tests to ensure the functionality of the application. To run the tests:
+
+1. Install `pytest` and `pytest-asyncio`:
+   ```bash
+   pip install pytest pytest-asyncio
+   ```
+
+2. Run the tests:
+   ```bash
+   pytest tests/ -v
+   ```
+
+---
+
+## Contributing
+
+Contributions are welcome! If you'd like to contribute, please follow these steps:
+1. Fork the repository.
+2. Create a new branch for your feature or bugfix.
+3. Submit a pull request with a detailed description of your changes.
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## Acknowledgments
+
+- Inspired by [db2dexpo](https://github.com/arapozojr/db2dexpo) by [arapozojr](https://github.com/arapozojr).
+- Uses the [Prometheus Client](https://github.com/prometheus/client_python) for metric export.
+
+---
