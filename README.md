@@ -1,6 +1,6 @@
 ---
 
-# db2Prom
+# DB2Prom
 
 > Dynamic Prometheus exporter for IBM Db2 in Python
 
