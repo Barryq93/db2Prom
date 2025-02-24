@@ -1,4 +1,9 @@
-ibm-db
-prometheus-client
-pyyaml
-asyncio
+prometheus-client==0.16.0
+ibm-db==3.1.0
+pydantic==1.10.7
+pyyaml==6.0
+structlog==22.3.0
+fastapi==0.95.2
+uvicorn==0.22.0
+cryptography==41.0.1
+pytest==7.3.1
