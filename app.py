@@ -11,31 +11,8 @@ import re
 from logging.handlers import RotatingFileHandler
 from db2Prom.db2 import Db2Connection
 from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR
-
-def setup_logging(log_path, log_level):
-    """
-    Set up logging with rotating file handlers.
-    """
-    # Create log directory if it doesn't exist
-    os.makedirs(log_path, exist_ok=True)
-
-    # Configure logger
-    logger = logging.getLogger()
-    logger.setLevel(log_level)
-
-    # Main log handler (rotating file handler)
-    log_file = os.path.join(log_path, "db2prom.log")
-    handler = RotatingFileHandler(log_file, maxBytes=10*1024*1024, backupCount=5)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-
-    # Error log handler (rotating file handler)
-    error_log_file = os.path.join(log_path, "db2prom.err")
-    error_handler = RotatingFileHandler(error_log_file, maxBytes=10*1024*1024, backupCount=5)
-    error_handler.setLevel(logging.ERROR)
-    error_handler.setFormatter(formatter)
-    logger.addHandler(error_handler)
+from db2Prom.config_manager import validate_config
+from db2Prom.logging_manager import setup_logging
 
 def db2_instance_connection(config_connection, exporter):
     """
@@ -144,7 +121,7 @@ def load_config_yaml(file_str):
             if not isinstance(file_dict, dict):
                 logging.fatal(f"Could not parse '{file_str}' as dict")
                 sys.exit(1)
-            return file_dict
+            return validate_config(file_dict).dict()  # Validate the configuration
     except yaml.YAMLError as e:
         logging.fatal(f"File {file_str} is not a valid YAML: {e}")
         sys.exit(1)
@@ -234,53 +211,48 @@ if __name__ == '__main__':
         sys.exit(1)
 
     try:
-        # Load global configuration from YAML file
+        # Load and validate configuration
         config = load_config_yaml(args.config_file)
-        logging.info(f"Loaded config: {config}")  # Logging loaded config
-        
+        logging.info(f"Loaded and validated config: {config}")
+
         global_config = config["global_config"]
         log_level = logging.getLevelName(global_config.get("log_level", "INFO"))
         log_path = global_config.get("log_path", "/path/to/logs/")
         port = global_config.get("port", 9844)
-        retry_conn_interval = global_config.get("retry_conn_interval", 60)  # Default to 60 if not explicitly set
-        logging.info(f"Retry connection interval: {retry_conn_interval}")  # Logging retry connection interval
-        
-        # Setup logging configuration
+        retry_conn_interval = global_config.get("retry_conn_interval", 60)
+
+        # Setup logging
         setup_logging(log_path, log_level)
-        logging.info("Configuration file loaded successfully.")
 
         # Validate global configuration variables
         for current_variable in ["retry_conn_interval", "default_time_interval"]:
             if int(global_config.get(current_variable, 15)) < 1:
                 logging.fatal(f"Invalid value for {current_variable}")
                 sys.exit(2)
-        
+
         # Load YAML files for DB2 connections and queries
         config_connections = config["connections"]
         config_queries = config["queries"]
-        
+
         # Get set of all connection labels
         max_conn_labels = get_labels_list(config_connections)
-        logging.info(f"Max connection labels: {max_conn_labels}")  # Logging max connection labels
-        
+        logging.info(f"Max connection labels: {max_conn_labels}")
+
         # Start Prometheus exporter and initialize metrics
         exporter = start_prometheus_exporter(config_queries, max_conn_labels, port)
-        
+
         # Setup signal handler for graceful shutdown
         signal.signal(signal.SIGINT, signal_handler)
-        
+
         # Start asyncio event loop and run main tasks
-        try:
-            loop = asyncio.get_event_loop()
-            tasks = []
-            for config_connection in config_connections:
-                tasks.append(main(config_connection, config_queries, exporter, int(global_config["default_time_interval"]), port))
-            loop.run_until_complete(asyncio.gather(*tasks))
-        except KeyboardInterrupt:
-            logging.info("Received KeyboardInterrupt, shutting down.")
-    except KeyError as ke:
-        logging.critical(f"{ke.args[0]} not found in global_config. Check configuration.")
+        loop = asyncio.get_event_loop()
+        tasks = []
+        for config_connection in config_connections:
+            tasks.append(main(config_connection, config_queries, exporter, int(global_config["default_time_interval"]), port))
+        loop.run_until_complete(asyncio.gather(*tasks))
+    except ValueError as ve:
+        logging.critical(f"Configuration validation error: {ve}")
         sys.exit(1)
     except Exception as e:
-        logging.critical(f"Error loading configuration: {e}. Check configuration.")
+        logging.critical(f"Unexpected error: {e}")
         sys.exit(1)

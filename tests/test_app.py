@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock, mock_open
 import os
 import logging
-from app import setup_logging, db2_instance_connection, load_config_yaml
+from app import setup_logging, db2_instance_connection, load_config_yaml, validate_config
 from db2Prom.db2 import Db2Connection
 
 class TestApp(unittest.TestCase):
@@ -37,7 +37,7 @@ class TestApp(unittest.TestCase):
         )
 
         # Verify the handlers were added to the logger
-        self.assertEqual(mock_logger.addHandler.call_count, 2)  # Main log handler and error log handler
+        self.assertEqual(mock_logger.addHandler.call_count, 3)  # Main log handler, error log handler, and console handler
 
     @patch('app.Db2Connection')
     def test_db2_instance_connection(self, mock_db2_connection):
@@ -94,6 +94,54 @@ class TestApp(unittest.TestCase):
             self.assertEqual(config["global_config"]["log_level"], "INFO")
             self.assertEqual(config["global_config"]["retry_conn_interval"], 60)
             self.assertEqual(config["global_config"]["default_time_interval"], 15)
+
+    def test_validate_config(self):
+        """
+        Test that the configuration validation works correctly.
+        """
+        valid_config = {
+            "global_config": {
+                "log_level": "INFO",
+                "retry_conn_interval": 60,
+                "default_time_interval": 15,
+                "log_path": "logs/",
+                "port": 9844
+            },
+            "connections": [
+                {
+                    "db_host": "localhost",
+                    "db_name": "test_db",
+                    "db_port": "50000",
+                    "db_user": "user",
+                    "db_passwd": "pass"
+                }
+            ],
+            "queries": [
+                {
+                    "name": "test_query",
+                    "query": "SELECT 1",
+                    "gauges": [
+                        {
+                            "name": "test_gauge",
+                            "desc": "Test gauge",
+                            "col": 1
+                        }
+                    ]
+                }
+            ]
+        }
+
+        # Test valid config
+        try:
+            validate_config(valid_config)
+        except ValueError as ve:
+            self.fail(f"validate_config raised ValueError unexpectedly: {ve}")
+
+        # Test invalid config (missing global_config)
+        invalid_config = valid_config.copy()
+        del invalid_config["global_config"]
+        with self.assertRaises(ValueError):
+            validate_config(invalid_config)
 
 if __name__ == '__main__':
     unittest.main()
