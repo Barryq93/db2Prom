@@ -9,6 +9,7 @@ import logging
 import asyncio
 import re
 import copy
+import random
 from logging.handlers import RotatingFileHandler
 from db2Prom.db2 import Db2Connection
 from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR
@@ -77,11 +78,18 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
     """
     Asynchronous function to execute queries and export metrics.
     """
-    logging.info(f"Starting query set for: {config_query['name']} with interval {config_query.get('time_interval', default_time_interval)} seconds.")
+    logging.info(
+        f"Starting query set for: {config_query['name']} with interval {config_query.get('time_interval', default_time_interval)} seconds."
+    )
     time_interval = config_query.get("time_interval", default_time_interval)
+    # Base delay between successful runs; also serves as the starting point for retries
+    retry_delay = time_interval
+    # Cap for exponential backoff to prevent unbounded growth
+    max_retry_delay = config_query.get("max_retry_delay", 300)
 
     while True:
         conn = await pool.acquire()
+        success = True
         try:
             # Ensure DB2 connection is established before each query execution
             conn.connect()
@@ -129,16 +137,27 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
                         g_labels_aux = g_labels.copy()
                         for k, v in g_labels_aux.items():
                             g_label_index = int(re.match(r'^\$(\d+)$', v).group(1)) - 1 if re.match(r'^\$(\d+)$', v) else 0
-                            g_labels_aux[k] = row[g_label_index] if row and len(row) >= g_label_index else INVALID_LABEL_STR
+                            g_labels_aux[k] = (
+                                row[g_label_index] if row and len(row) >= g_label_index else INVALID_LABEL_STR
+                            )
                         labels = g_labels_aux | c_labels
                         if row and len(row) >= col:
                             exporter.set_gauge(g["name"], row[col], labels)
                 g_counter += 1
         except Exception as e:
+            success = False
             logging.error(f"Error executing query {config_query['name']}: {e}")
         finally:
             pool.release(conn)
-            await asyncio.sleep(time_interval)
+            if success:
+                # Reset delay after a successful execution so the normal interval resumes
+                retry_delay = time_interval
+                await asyncio.sleep(time_interval)
+            else:
+                # Exponentially increase delay, capped at max_retry_delay, and add jitter
+                retry_delay = min(retry_delay * 2, max_retry_delay)
+                jitter = random.uniform(0, retry_delay * 0.1)  # up to 10% jitter to avoid lockstep
+                await asyncio.sleep(retry_delay + jitter)
 
 def load_config_yaml(file_str):
     """
