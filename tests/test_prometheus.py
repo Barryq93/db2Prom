@@ -30,18 +30,19 @@ class TestCustomExporter(unittest.TestCase):
         # This test assumes the gauge.set() method works as expected.
 
     @patch('db2Prom.prometheus.start_http_server')
-    def test_start_exporter(self, mock_start_http_server):
-        """
-        Test that the Prometheus exporter starts correctly.
-        """
-        # Create an instance of CustomExporter
-        exporter = CustomExporter(port=9877)
-
-        # Call the start method
+    @patch('db2Prom.prometheus.socket.gethostname', return_value='test-host')
+    def test_start_exporter_default_host(self, mock_gethostname, mock_start_http_server):
+        """Exporter binds to the OS hostname by default."""
+        exporter = CustomExporter()
         exporter.start()
+        mock_start_http_server.assert_called_once_with(9877, addr="test-host")
 
-        # Verify start_http_server was called with the correct port
-        mock_start_http_server.assert_called_once_with(9877)
+    @patch('db2Prom.prometheus.start_http_server')
+    def test_start_exporter_with_custom_host(self, mock_start_http_server):
+        """Exporter binds to a specified host when provided."""
+        exporter = CustomExporter(port=9877, host="127.0.0.1")
+        exporter.start()
+        mock_start_http_server.assert_called_once_with(9877, addr="127.0.0.1")
 
 if __name__ == '__main__':
     unittest.main()

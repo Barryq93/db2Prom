@@ -76,6 +76,10 @@ Run the application:
 python app.py config.yaml
 ```
 
+The exporter listens on the port defined in `global_config` within
+`config.yaml` and binds to the machine's hostname. Prometheus servers on other
+machines can use that hostname to scrape the metrics endpoint.
+
 Set DB2DEXPO_LOG_LEVEL to DEBUG to show query executions and metric updates.
 
 Example output of application startup:
@@ -89,7 +93,7 @@ Example output of application startup:
 2023-01-07 10:24:17,232 - db2dexpo.db2 - INFO - [127.0.0.1:50000/sample] connected
 ```
 
-You can then open [http://localhost:9877/](http://localhost:9877/) and see the exported metrics.
+You can then open `http://<exporter-host>:9877/` and see the exported metrics.
 
 Ctrl+c will stop the application.
 
@@ -142,3 +146,11 @@ db2_lockwaits_maxwait_seconds{db2instance="db2inst1",dbhost="127.0.0.1",dbname="
 # TYPE db2_employees_created gauge
 db2_employees_created{db2instance="db2inst1",dbhost="127.0.0.1",dbname="sample",dbport="50000",dbenv="test",persontype="employee"} 1442.0
 ```
+
+## Deployment considerations
+
+The built-in HTTP server used by `db2Prom` binds to the machine's hostname and
+does not provide transport security or authentication. For production
+deployments, run the exporter behind a reverse proxy that handles TLS
+termination and optional authentication middleware (e.g., basic auth) to
+restrict access to the metrics endpoint.
