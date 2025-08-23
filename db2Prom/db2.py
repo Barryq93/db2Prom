@@ -134,6 +134,8 @@ class Db2Connection:
             logger.warning(
                 f"[{self.connection_string_print}] [{name}] failed to execute: {e}"
             )
+            if self.conn:
+                ibm_db.close(self.conn)
             self.conn = None
             raise
 
