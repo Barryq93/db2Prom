@@ -112,18 +112,6 @@ def db2_instance_connection(config_connection, exporter):
 
     return Db2Connection(**conn)
 
-async def db2_keep_connection(db2_conn, retry_conn_interval=60):
-    """
-    Asynchronous function to maintain DB2 connection.
-    """
-    logging.info(f"Starting DB2 connection keeper with retry interval {retry_conn_interval} seconds.")
-    while True:
-        try:
-            db2_conn.connect()
-        except Exception as e:
-            logging.error(f"Error keeping DB2 connection: {e}")
-        await asyncio.sleep(retry_conn_interval)
-
 async def query_set(config_connection, pool, config_query, exporter, default_time_interval):
     """
     Asynchronous function to execute queries and export metrics.
@@ -400,19 +388,16 @@ if __name__ == '__main__':
         log_level = logging.getLevelName(global_config.get("log_level", "INFO"))
         log_path = global_config.get("log_path", "/path/to/logs/")
         port = global_config.get("port", 9844)
-        retry_conn_interval = global_config.get("retry_conn_interval", 60)  # Default to 60 if not explicitly set
         log_console = global_config.get("log_console", True)
-        logging.info(f"Retry connection interval: {retry_conn_interval}")  # Logging retry connection interval
 
         # Setup logging configuration
         setup_logging(log_path, log_level, log_console)
         logging.info("Configuration file loaded successfully.")
 
         # Validate global configuration variables
-        for current_variable in ["retry_conn_interval", "default_time_interval"]:
-            if int(global_config.get(current_variable, 15)) < 1:
-                logging.fatal(f"Invalid value for {current_variable}")
-                sys.exit(2)
+        if int(global_config.get("default_time_interval", 15)) < 1:
+            logging.fatal("Invalid value for default_time_interval")
+            sys.exit(2)
         
         # Load YAML files for DB2 connections and queries
         config_connections = config["connections"]

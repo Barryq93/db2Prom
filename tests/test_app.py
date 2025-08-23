@@ -127,7 +127,6 @@ class TestApp(unittest.TestCase):
         yaml_content = """
         global_config:
           log_level: INFO
-          retry_conn_interval: 60
           default_time_interval: 15
           log_path: "logs/"
           port: 9844
@@ -139,7 +138,6 @@ class TestApp(unittest.TestCase):
 
             # Verify the configuration was loaded correctly
             self.assertEqual(config["global_config"]["log_level"], "INFO")
-            self.assertEqual(config["global_config"]["retry_conn_interval"], 60)
             self.assertEqual(config["global_config"]["default_time_interval"], 15)
 
     def test_sanitize_config(self):
