@@ -3,8 +3,6 @@ import logging
 import socket
 import time
 
-# Initialize logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 INVALID_LABEL_STR = "-"
