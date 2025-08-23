@@ -2,13 +2,13 @@ import unittest
 from unittest.mock import patch, MagicMock, mock_open
 import os
 import logging
-from app import setup_logging, db2_instance_connection, load_config_yaml
+from app import setup_logging, db2_instance_connection, load_config_yaml, sanitize_config
 from db2Prom.db2 import Db2Connection
 
 class TestApp(unittest.TestCase):
 
     @patch('os.makedirs')
-    @patch('logging.handlers.RotatingFileHandler')
+    @patch('app.RotatingFileHandler')
     @patch('logging.getLogger')
     def test_setup_logging(self, mock_get_logger, mock_rotating_file_handler, mock_makedirs):
         """
@@ -94,6 +94,17 @@ class TestApp(unittest.TestCase):
             self.assertEqual(config["global_config"]["log_level"], "INFO")
             self.assertEqual(config["global_config"]["retry_conn_interval"], 60)
             self.assertEqual(config["global_config"]["default_time_interval"], 15)
+
+    def test_sanitize_config(self):
+        config = {
+            "connections": [{"db_user": "u", "db_passwd": "secret"}],
+            "global_config": {"password": "another"},
+        }
+        sanitized = sanitize_config(config)
+        self.assertEqual(sanitized["connections"][0]["db_passwd"], "******")
+        self.assertEqual(sanitized["global_config"]["password"], "******")
+        # Original config should remain unchanged
+        self.assertEqual(config["connections"][0]["db_passwd"], "secret")
 
 if __name__ == '__main__':
     unittest.main()

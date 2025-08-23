@@ -29,7 +29,7 @@ class TestCustomExporter(unittest.TestCase):
         # Verify the gauge value was set (requires mocking Prometheus internals)
         # This test assumes the gauge.set() method works as expected.
 
-    @patch('prometheus_client.start_http_server')
+    @patch('db2Prom.prometheus.start_http_server')
     def test_start_exporter(self, mock_start_http_server):
         """
         Test that the Prometheus exporter starts correctly.
