@@ -12,6 +12,7 @@ import copy
 from logging.handlers import RotatingFileHandler
 from db2Prom.db2 import Db2Connection
 from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR
+from db2Prom.connection_pool import ConnectionPool
 
 def setup_logging(log_path, log_level):
     """
@@ -72,7 +73,7 @@ async def db2_keep_connection(db2_conn, retry_conn_interval=60):
             logging.error(f"Error keeping DB2 connection: {e}")
         await asyncio.sleep(retry_conn_interval)
 
-async def query_set(config_connection, db2_conn, config_query, exporter, default_time_interval):
+async def query_set(config_connection, pool, config_query, exporter, default_time_interval):
     """
     Asynchronous function to execute queries and export metrics.
     """
@@ -80,10 +81,10 @@ async def query_set(config_connection, db2_conn, config_query, exporter, default
     time_interval = config_query.get("time_interval", default_time_interval)
 
     while True:
+        conn = await pool.acquire()
         try:
             # Ensure DB2 connection is established before each query execution
-            db2_conn.close()
-            db2_conn.connect()
+            conn.connect()
 
             # Prepare labels for metrics
             c_labels = {
@@ -98,7 +99,7 @@ async def query_set(config_connection, db2_conn, config_query, exporter, default
             c_labels = {i: INVALID_LABEL_STR for i in max_conn_labels} | c_labels
 
             # Execute query and export metrics
-            res = db2_conn.execute(config_query["query"], config_query["name"])
+            res = conn.execute(config_query["query"], config_query["name"])
             g_counter = 0
             for g in config_query["gauges"]:
                 if "extra_labels" in g:
@@ -132,6 +133,7 @@ async def query_set(config_connection, db2_conn, config_query, exporter, default
         except Exception as e:
             logging.error(f"Error executing query {config_query['name']}: {e}")
         finally:
+            pool.release(conn)
             await asyncio.sleep(time_interval)
 
 def load_config_yaml(file_str):
@@ -210,24 +212,21 @@ def start_prometheus_exporter(config_queries, max_conn_labels, port):
         raise e
 
 async def main(config_connection, config_queries, exporter, default_time_interval, port):
-    """
-    Main function to coordinate DB2 connection keep-alive and query execution.
-    """
+    """Coordinate query execution using a connection pool."""
     executions = []
+    pool = ConnectionPool(lambda: db2_instance_connection(config_connection, exporter), maxsize=10)
     try:
-        db2_conn = db2_instance_connection(config_connection, exporter)  # Pass exporter to db2_instance_connection
-        retry_connect_interval = config_connection.get("retry_conn_interval", 60)
-        executions.append(db2_keep_connection(db2_conn, retry_connect_interval))
-
         for q in config_queries:
             if "query" not in q:
                 raise Exception(f"{q} is missing 'query' key")
-            executions.append(query_set(config_connection, db2_conn, q, exporter, default_time_interval))
+            executions.append(query_set(config_connection, pool, q, exporter, default_time_interval))
 
         await asyncio.gather(*executions)
     except KeyboardInterrupt:
         logging.info("Received KeyboardInterrupt, shutting down.")
         return None
+    finally:
+        await pool.close()
 
 def signal_handler(sig, frame):
     """
