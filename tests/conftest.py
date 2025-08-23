@@ -18,6 +18,7 @@ ibm_db.pconnect = _dummy
 ibm_db.prepare = _dummy
 ibm_db.execute = _dummy
 ibm_db.fetch_tuple = lambda stmt: ()
+ibm_db.free_stmt = lambda stmt: True
 ibm_db.close = lambda conn: True
 
 sys.modules.setdefault("ibm_db", ibm_db)
