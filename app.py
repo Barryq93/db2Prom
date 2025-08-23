@@ -22,6 +22,8 @@ MAX_LABEL_LENGTH = 100
 # Precompiled regex to replace illegal characters in label values
 _LABEL_CLEAN_RE = re.compile(r"[^a-zA-Z0-9_]")
 
+# Flag to avoid configuring logging multiple times
+_LOGGING_CONFIGURED = False
 
 def sanitize_label_value(value, max_length: int = MAX_LABEL_LENGTH) -> str:
     """Sanitize a label value for Prometheus metrics.
@@ -63,12 +65,19 @@ def setup_logging(log_path, log_level, log_console=True):
     """
     Set up logging with rotating file handlers and optional console output.
     """
+    global _LOGGING_CONFIGURED
+    if _LOGGING_CONFIGURED:
+        return
+
     # Create log directory if it doesn't exist
     os.makedirs(log_path, exist_ok=True)
 
     # Configure logger
     logger = logging.getLogger()
     logger.setLevel(log_level)
+
+    # Clear existing handlers to avoid duplicate logs when reconfigured
+    logger.handlers.clear()
 
     # Main log handler (rotating file handler)
     log_file = os.path.join(log_path, "db2prom.log")
@@ -89,6 +98,8 @@ def setup_logging(log_path, log_level, log_console=True):
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
+
+    _LOGGING_CONFIGURED = True
 
 def db2_instance_connection(config_connection, exporter):
     """
