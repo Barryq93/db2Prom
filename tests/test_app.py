@@ -195,7 +195,16 @@ class TestApp(unittest.TestCase):
         }
 
         with self.assertRaises(asyncio.CancelledError):
-            asyncio.run(query_set(config_connection, pool, config_query, exporter, 1))
+            asyncio.run(
+                query_set(
+                    config_connection,
+                    pool,
+                    config_query,
+                    exporter,
+                    1,
+                    {"dbhost", "dbport", "dbname"},
+                )
+            )
 
         # One of the calls should contain the sanitized label from the query result
         self.assertGreaterEqual(exporter.set_gauge.call_count, 1)
@@ -231,7 +240,16 @@ class TestApp(unittest.TestCase):
         }
 
         with self.assertRaises(asyncio.CancelledError):
-            asyncio.run(query_set(config_connection, pool, config_query, exporter, 1))
+            asyncio.run(
+                query_set(
+                    config_connection,
+                    pool,
+                    config_query,
+                    exporter,
+                    1,
+                    {"dbhost", "dbport", "dbname"},
+                )
+            )
 
         conn.execute.assert_called_with("sql", "q", None, timeout=None, max_rows=5)
 
@@ -251,7 +269,16 @@ class TestApp(unittest.TestCase):
         ]
         exporter = MagicMock()
 
-        asyncio.run(main(config_connection, config_queries, exporter, 1, 0))
+        asyncio.run(
+            main(
+                config_connection,
+                config_queries,
+                exporter,
+                1,
+                0,
+                {"dbhost", "dbport", "dbname"},
+            )
+        )
 
         called = {c.args[2]["name"] for c in mock_query_set.call_args_list}
         self.assertEqual(called, {"q1", "q3", "q4"})
