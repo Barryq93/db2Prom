@@ -211,10 +211,10 @@ def get_labels_list(config_connections):
     return max_conn_labels
 
 def start_prometheus_exporter(config_queries, max_conn_labels, port):
-    """
-    Starts the Prometheus exporter and initializes metrics.
-    """
-    logging.info(f"Starting Prometheus exporter on port {port} and initializing metrics.")
+    """Start the Prometheus exporter and initialize metrics."""
+    logging.info(
+        f"Starting Prometheus exporter on port {port} and initializing metrics."
+    )
     try:
         custom_exporter = CustomExporter(port=port)
         for q in config_queries:
