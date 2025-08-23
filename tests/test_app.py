@@ -144,10 +144,16 @@ class TestApp(unittest.TestCase):
         with self.assertRaises(asyncio.CancelledError):
             asyncio.run(query_set(config_connection, pool, config_query, exporter, 1))
 
-        exporter.set_gauge.assert_called_once()
-        args, _ = exporter.set_gauge.call_args
-        labels = args[2]
-        self.assertEqual(labels["lbl"], sanitize_label_value("bad label!!"))
+        # One of the calls should contain the sanitized label from the query result
+        self.assertGreaterEqual(exporter.set_gauge.call_count, 1)
+        found = False
+        for call in exporter.set_gauge.call_args_list:
+            lbls = call.args[2]
+            if "lbl" in lbls:
+                self.assertEqual(lbls["lbl"], sanitize_label_value("bad label!!"))
+                found = True
+                break
+        self.assertTrue(found)
 
 if __name__ == '__main__':
     unittest.main()

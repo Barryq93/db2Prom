@@ -10,6 +10,7 @@ import asyncio
 import re
 import copy
 import random
+import time
 from logging.handlers import RotatingFileHandler
 from db2Prom.db2 import Db2Connection
 from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR
@@ -129,15 +130,17 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
     retry_delay = time_interval
     # Cap for exponential backoff to prevent unbounded growth
     max_retry_delay = config_query.get("max_retry_delay", 300)
+    query_label = sanitize_label_value(config_query["name"])
 
     while True:
         conn = await pool.acquire()
         success = True
+        start_time = None
         try:
             # Ensure DB2 connection is established before each query execution
             conn.connect()
 
-            # Prepare labels for metrics
+            # Prepare labels for custom metrics
             c_labels = {
                 "dbhost": config_connection["db_host"],
                 "dbport": config_connection["db_port"],
@@ -150,11 +153,14 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
             c_labels = {i: INVALID_LABEL_STR for i in max_conn_labels} | c_labels
 
             # Execute query and export metrics
+            start_time = time.perf_counter()
             res = await conn.execute(
                 config_query["query"],
                 config_query["name"],
                 timeout=config_query.get("timeout"),
             )
+            duration = time.perf_counter() - start_time
+            exporter.record_query_duration(query_label, duration)
             g_counter = 0
             for g in config_query["gauges"]:
                 if "extra_labels" in g:
@@ -172,9 +178,9 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
                 if not has_special_labels:
                     if res:
                         row = res[0]
-                        labels = g_labels | c_labels
+                        labels_g = g_labels | c_labels
                         if row and len(row) >= col:
-                            exporter.set_gauge(g["name"], row[col], labels)
+                            exporter.set_gauge(g["name"], row[col], labels_g)
                 else:
                     for row in res:
                         g_labels_aux = g_labels.copy()
@@ -190,11 +196,15 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
                                 else None
                             )
                             g_labels_aux[k] = sanitize_label_value(raw_value)
-                        labels = g_labels_aux | c_labels
+                        labels_g = g_labels_aux | c_labels
                         if row and len(row) >= col:
-                            exporter.set_gauge(g["name"], row[col], labels)
+                            exporter.set_gauge(g["name"], row[col], labels_g)
                 g_counter += 1
+            exporter.record_query_success(query_label)
         except Exception as e:
+            if start_time is not None:
+                duration = time.perf_counter() - start_time
+                exporter.record_query_duration(query_label, duration)
             success = False
             logging.error(f"Error executing query {config_query['name']}: {e}")
         finally:
@@ -266,7 +276,27 @@ def start_prometheus_exporter(config_queries, max_conn_labels, port):
         f"Starting Prometheus exporter on port {port} and initializing metrics."
     )
     try:
-        custom_exporter = CustomExporter(port=port)
+        # Only the query name is required for default query metrics to keep
+        # label cardinality and memory usage low.
+        query_names = [sanitize_label_value(q["name"]) for q in config_queries]
+        custom_exporter = CustomExporter(port=port, query_names=query_names)
+
+        # Default per-query metrics are configured from the YAML file so that
+        # only queries defined there are exposed.
+        custom_exporter.create_gauge(
+            "db2_query_duration_seconds",
+            "Duration of DB2 query execution in seconds",
+            ["query"],
+        )
+        custom_exporter.create_gauge(
+            "db2_query_last_success_timestamp",
+            "Unix timestamp of the last successful DB2 query execution",
+            ["query"],
+        )
+        for q in query_names:
+            labels = {"query": q}
+            custom_exporter.set_gauge("db2_query_duration_seconds", 0.0, labels)
+            custom_exporter.set_gauge("db2_query_last_success_timestamp", 0.0, labels)
         for q in config_queries:
             if "gauges" not in q:
                 raise Exception(f"{q} is missing 'gauges' key")

@@ -44,5 +44,26 @@ class TestCustomExporter(unittest.TestCase):
         exporter.start()
         mock_start_http_server.assert_called_once_with(9877, addr="127.0.0.1")
 
+    def test_query_cache_initialisation_and_record(self):
+        """Query names from config initialise cache and metrics."""
+        exporter = CustomExporter(query_names=["q1"])
+        exporter.create_gauge(
+            "db2_query_duration_seconds",
+            "Duration of DB2 query execution in seconds",
+            ["query"],
+        )
+        exporter.create_gauge(
+            "db2_query_last_success_timestamp",
+            "Unix timestamp of the last successful DB2 query execution",
+            ["query"],
+        )
+        exporter.set_gauge("db2_query_duration_seconds", 0.0, {"query": "q1"})
+        exporter.set_gauge("db2_query_last_success_timestamp", 0.0, {"query": "q1"})
+        # Cache starts at 0 for configured queries
+        self.assertEqual(exporter.query_last_success["q1"], 0.0)
+        exporter.record_query_duration("q1", 1.23)
+        exporter.record_query_success("q1")
+        self.assertGreater(exporter.query_last_success["q1"], 0)
+
 if __name__ == '__main__':
     unittest.main()
