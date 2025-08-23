@@ -169,7 +169,11 @@ class TestApp(unittest.TestCase):
         pool = MagicMock()
         conn = MagicMock()
         conn.connect = MagicMock()
-        conn.execute = AsyncMock(return_value=[(1, "bad label!!")])
+
+        async def gen_rows():
+            yield (1, "bad label!!")
+
+        conn.execute = MagicMock(return_value=gen_rows())
         pool.acquire = AsyncMock(return_value=conn)
         pool.release = MagicMock()
 
@@ -200,7 +204,11 @@ class TestApp(unittest.TestCase):
         pool = MagicMock()
         conn = MagicMock()
         conn.connect = MagicMock()
-        conn.execute = AsyncMock(return_value=[[1]])
+
+        async def gen_rows():
+            yield [1]
+
+        conn.execute = MagicMock(return_value=gen_rows())
         pool.acquire = AsyncMock(return_value=conn)
         pool.release = MagicMock()
 
@@ -215,7 +223,7 @@ class TestApp(unittest.TestCase):
         with self.assertRaises(asyncio.CancelledError):
             asyncio.run(query_set(config_connection, pool, config_query, exporter, 1))
 
-        conn.execute.assert_awaited_with("sql", "q", None, timeout=None, max_rows=5)
+        conn.execute.assert_called_with("sql", "q", None, timeout=None, max_rows=5)
 
     @patch('app.ConnectionPool')
     @patch('app.query_set', new_callable=AsyncMock)
