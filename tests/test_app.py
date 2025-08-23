@@ -47,6 +47,7 @@ from app import (
     sanitize_label_value,
     query_set,
     main,
+    ConfigError,
 )
 from db2Prom.db2 import Db2Connection
 
@@ -132,6 +133,12 @@ class TestApp(unittest.TestCase):
             exporter=mock_exporter  # Pass the exporter
         )
 
+    def test_db2_instance_connection_missing_field_raises(self):
+        """Missing connection fields should raise ConfigError."""
+        config_connection = {"db_name": "db"}  # Missing other fields
+        with self.assertRaises(ConfigError):
+            db2_instance_connection(config_connection, MagicMock())
+
     def test_load_config_yaml(self):
         """
         Test that the YAML configuration file is loaded correctly.
@@ -152,6 +159,10 @@ class TestApp(unittest.TestCase):
             # Verify the configuration was loaded correctly
             self.assertEqual(config["global_config"]["log_level"], "INFO")
             self.assertEqual(config["global_config"]["default_time_interval"], 15)
+
+    def test_load_config_yaml_missing_file(self):
+        with self.assertRaises(ConfigError):
+            load_config_yaml("nonexistent.yaml")
 
     def test_sanitize_config(self):
         config = {
