@@ -47,9 +47,9 @@ Key features include:
 
 Grateful to [arapozojr](https://github.com/arapozojr) for their initial work on `db2dexpo`, which served as the foundation for this project.
 
-## Running Locally
+## Linux setup
 
-To run db2Prom locally, follow these steps:
+To run db2Prom on Linux, follow these steps:
 
 ### Prerequisites
 
@@ -117,6 +117,55 @@ You can then open `http://<exporter-host>:9877/` and see the exported metrics.
 
 Ctrl+c will stop the application.
 
+### Building a Linux executable
+
+To bundle the exporter into a standalone binary on Linux (e.g. RHEL), install
+PyInstaller and build the executable:
+
+```bash
+pip install pyinstaller
+pyinstaller --onefile --name db2Prom app.py
+```
+
+The resulting binary is placed in `dist/db2Prom` and can be run with:
+
+```bash
+./db2Prom config.yaml
+```
+
+## Windows setup
+
+The exporter also runs on Windows. The steps are similar:
+
+1. Install Python 3.10.8 or later and ensure `pip` is available.
+2. Install required packages:
+
+   ```powershell
+   pip install -r requirements.txt
+   ```
+3. Run the exporter and pass your configuration file:
+
+   ```powershell
+   python app.py config.yaml
+   ```
+
+### Building a Windows executable
+
+You can bundle the exporter into a standalone `.exe` using
+[PyInstaller](https://pyinstaller.org/):
+
+```powershell
+pip install pyinstaller
+pyinstaller --onefile --name db2Prom app.py
+```
+
+The executable is written to `dist/db2Prom.exe` and can be invoked with the
+configuration file argument:
+
+```powershell
+db2Prom.exe config.yaml
+```
+
 ## Platform-specific signal handling
 
 `db2Prom` registers handlers for `SIGINT` and `SIGTERM` using
@@ -183,3 +232,24 @@ does not provide transport security or authentication. For production
 deployments, run the exporter behind a reverse proxy that handles TLS
 termination and optional authentication middleware (e.g., basic auth) to
 restrict access to the metrics endpoint.
+
+## GitHub releases with binaries
+
+Automate building and publishing executables for both Linux and Windows by
+adding a GitHub Actions workflow, for example at
+`.github/workflows/release.yml`:
+
+1. Trigger the workflow on tag creation.
+2. Use a job matrix with `ubuntu-latest` and `windows-latest` runners.
+3. Each job installs Python and project requirements, then runs:
+
+   ```bash
+   pyinstaller --onefile --name db2Prom app.py
+   ```
+
+4. Upload the resulting binaries with `actions/upload-artifact`.
+5. Publish a release and attach the artifacts using an action such as
+   `softprops/action-gh-release`.
+
+After pushing a tag (e.g. `git tag v1.0.0 && git push origin v1.0.0`), the
+workflow builds both binaries and attaches them to the GitHub release page.
