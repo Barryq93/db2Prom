@@ -157,59 +157,66 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
             max_conn_labels = {"dbhost", "dbenv", "dbname", "dbinstance", "dbport"}
             c_labels = {i: INVALID_LABEL_STR for i in max_conn_labels} | c_labels
 
-            # Execute query and export metrics
-            start_time = time.perf_counter()
-            res = [
-                row
-                async for row in conn.execute(
-                    config_query["query"],
-                    config_query["name"],
-                    config_query.get("params"),
-                    timeout=config_query.get("timeout"),
-                    max_rows=config_query.get("max_rows"),
+            # Prepare gauge configurations for streaming processing
+            g_counter = 0
+            gauge_configs = []
+            for g in config_query["gauges"]:
+                g_labels = g.get("extra_labels", {})
+                col = int(g["col"]) - 1 if "col" in g else g_counter
+                has_special_labels = any(
+                    re.match(r"^\$\d+$", v) for v in g_labels.values()
                 )
+                gauge_configs.append((g, g_labels, col, has_special_labels))
+                g_counter += 1
+
+            static_gauges = [
+                (g, g_labels, col)
+                for g, g_labels, col, special in gauge_configs
+                if not special
             ]
+            dynamic_gauges = [
+                (g, g_labels, col)
+                for g, g_labels, col, special in gauge_configs
+                if special
+            ]
+
+            # Execute query and export metrics as rows arrive
+            start_time = time.perf_counter()
+            first_row = True
+            async for row in conn.execute(
+                config_query["query"],
+                config_query["name"],
+                config_query.get("params"),
+                timeout=config_query.get("timeout"),
+                max_rows=config_query.get("max_rows"),
+            ):
+                if first_row:
+                    for g, g_labels, col in static_gauges:
+                        labels_g = g_labels | c_labels
+                        if row and len(row) > col:
+                            exporter.set_gauge(g["name"], row[col], labels_g)
+                    first_row = False
+
+                for g, g_labels, col in dynamic_gauges:
+                    g_labels_aux = g_labels.copy()
+                    for k, v in g_labels_aux.items():
+                        g_label_index = (
+                            int(re.match(r"^\$(\d+)$", v).group(1)) - 1
+                            if re.match(r"^\$(\d+)$", v)
+                            else 0
+                        )
+                        raw_value = (
+                            row[g_label_index]
+                            if row and len(row) > g_label_index
+                            else None
+                        )
+                        g_labels_aux[k] = sanitize_label_value(raw_value)
+                    labels_g = g_labels_aux | c_labels
+                    if row and len(row) > col:
+                        exporter.set_gauge(g["name"], row[col], labels_g)
+
             duration = time.perf_counter() - start_time
             exporter.record_query_duration(query_label, duration)
-            g_counter = 0
-            for g in config_query["gauges"]:
-                if "extra_labels" in g:
-                    g_labels = g["extra_labels"]
-                else:
-                    g_labels = {}
-
-                if "col" in g:
-                    col = int(g["col"]) - 1
-                else:
-                    col = g_counter
-
-                has_special_labels = any(re.match(r'^\$\d+$', v) for v in g_labels.values())
-
-                if not has_special_labels:
-                    if res:
-                        row = res[0]
-                        labels_g = g_labels | c_labels
-                        if row and len(row) >= col:
-                            exporter.set_gauge(g["name"], row[col], labels_g)
-                else:
-                    for row in res:
-                        g_labels_aux = g_labels.copy()
-                        for k, v in g_labels_aux.items():
-                            g_label_index = (
-                                int(re.match(r'^\$(\d+)$', v).group(1)) - 1
-                                if re.match(r'^\$(\d+)$', v)
-                                else 0
-                            )
-                            raw_value = (
-                                row[g_label_index]
-                                if row and len(row) > g_label_index
-                                else None
-                            )
-                            g_labels_aux[k] = sanitize_label_value(raw_value)
-                        labels_g = g_labels_aux | c_labels
-                        if row and len(row) >= col:
-                            exporter.set_gauge(g["name"], row[col], labels_g)
-                g_counter += 1
             exporter.record_query_success(query_label)
             # Reset timeout gauge after a successful query execution
             exporter.set_gauge("db2_query_timeout", 0, {"query": query_label})
