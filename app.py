@@ -158,6 +158,7 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
                 config_query["query"],
                 config_query["name"],
                 timeout=config_query.get("timeout"),
+                max_rows=config_query.get("max_rows"),
             )
             duration = time.perf_counter() - start_time
             exporter.record_query_duration(query_label, duration)

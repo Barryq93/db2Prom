@@ -1,5 +1,27 @@
 import unittest
+import unittest
+import sys
+import types
 from unittest.mock import patch, MagicMock
+
+# Stub prometheus_client so tests do not require the real dependency
+class _Gauge:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def labels(self, **kwargs):
+        return self
+
+    def set(self, value):
+        pass
+
+prom_client_stub = types.SimpleNamespace(
+    start_http_server=MagicMock(),
+    Gauge=_Gauge,
+    REGISTRY=types.SimpleNamespace(_names_to_collectors={}),
+)
+sys.modules.setdefault("prometheus_client", prom_client_stub)
+
 from db2Prom.prometheus import CustomExporter
 from prometheus_client import Gauge
 

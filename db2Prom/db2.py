@@ -43,7 +43,13 @@ class Db2Connection:
             self.exporter.set_gauge("db2_connection_status", 0)
             raise e
 
-    async def execute(self, query: str, name: str, timeout: float | None = None):
+    async def execute(
+        self,
+        query: str,
+        name: str,
+        timeout: float | None = None,
+        max_rows: int | None = None,
+    ):
         """
         Execute a SQL query and return the results.
         The execution is offloaded to a thread using run_in_executor. If the
@@ -69,9 +75,11 @@ class Db2Connection:
 
             logger.debug(f"[{self.connection_string_print}] [{name}] executed")
             rows = []
-            row = list(ibm_db.fetch_tuple(result))
+            row = ibm_db.fetch_tuple(result)
             while row:
-                rows.append(row)
+                rows.append(list(row))
+                if max_rows is not None and len(rows) >= max_rows:
+                    break
                 row = ibm_db.fetch_tuple(result)
             return rows
         except Exception as e:
