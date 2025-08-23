@@ -44,6 +44,7 @@ queries:
   - name: "Applications count"
     runs_on: [] # Query runs on every connection
     time_interval: 15
+    max_rows: 100 # Limit the number of rows processed
     query: |
       SELECT
       count(*) as count,

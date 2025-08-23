@@ -15,6 +15,7 @@ Key features include:
 - **Asynchronous Execution**: Run multiple queries concurrently for optimal performance.
 - **Persistent Connections**: Automatically reconnect to databases if the connection is dropped.
 - **Configuration via YAML**: Easily configure which metrics to export and which databases to connect using YAML files.
+- **Row Limiting**: Prevent runaway result sets by capping rows per query with an optional `max_rows` setting.
 - **Label Sanitization**: Clean DB-sourced label values so they contain only letters, numbers, and underscores. Any character outside `[A-Za-z0-9_]` (e.g., spaces, hyphens, slashes) is replaced with `_`, and values longer than 100 characters are trimmed.
 
 # Changes from db2dexpo
@@ -69,7 +70,17 @@ Install all required packages using pip:
 pip3 install -r requirements.txt
 ```
 
-Check [the example config YAML](config.example.yaml) on how to handle multiple databases with different access. Use this example YAML to also make your own config.yaml file, with your queries and gauge metrics.
+Check [the example config YAML](config.example.yaml) on how to handle multiple databases with different access. Each query can optionally include a `max_rows` field to cap the number of rows processed:
+
+```yaml
+- name: "Applications count"
+  time_interval: 15
+  max_rows: 100
+  query: |
+    SELECT ...
+```
+
+Use this example YAML to also make your own `config.yaml` file, with your queries and gauge metrics.
 
 Run the application:
 
@@ -108,7 +119,7 @@ cd db2dexpo/
 ```
 
 
-Check [the example config YAML](config.example.yaml) on how to handle multiple databases with different access. Use this example YAML to also make your own config.yaml file, with your queries and gauge metrics.
+Check [the example config YAML](config.example.yaml) on how to handle multiple databases with different access. Use this example YAML to also make your own `config.yaml` file with custom queries, metrics, and optional `max_rows` limits.
 
 Build Docker image:
 

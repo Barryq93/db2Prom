@@ -30,6 +30,7 @@ queries:
   - name: "Applications count"
     runs_on: []
     time_interval: 15
+    max_rows: 100
     query: |
       SELECT
       count(*) as count,

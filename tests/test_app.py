@@ -1,8 +1,41 @@
 import unittest
 import asyncio
+import sys
+import types
 from unittest.mock import patch, MagicMock, mock_open, AsyncMock
 import os
 import logging
+
+# Minimal stubs for external dependencies so tests run without optional packages
+class _Gauge:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def labels(self, **kwargs):
+        return self
+
+    def set(self, value):
+        pass
+
+prom_client_stub = types.SimpleNamespace(
+    start_http_server=MagicMock(),
+    Gauge=_Gauge,
+    REGISTRY=types.SimpleNamespace(_names_to_collectors={}),
+)
+sys.modules.setdefault("prometheus_client", prom_client_stub)
+
+ibm_db_stub = types.SimpleNamespace(
+    SQL_ATTR_INFO_PROGRAMNAME=0,
+    SQL_ATTR_INFO_WRKSTNNAME=0,
+    SQL_ATTR_INFO_ACCTSTR=0,
+    SQL_ATTR_INFO_APPLNAME=0,
+    pconnect=MagicMock(),
+    exec_immediate=MagicMock(),
+    fetch_tuple=MagicMock(),
+    close=MagicMock(),
+)
+sys.modules.setdefault("ibm_db", ibm_db_stub)
+
 from app import (
     setup_logging,
     db2_instance_connection,
@@ -154,6 +187,29 @@ class TestApp(unittest.TestCase):
                 found = True
                 break
         self.assertTrue(found)
+
+    @patch('app.asyncio.sleep', side_effect=asyncio.CancelledError)
+    def test_query_set_passes_max_rows(self, _):
+        exporter = MagicMock()
+        pool = MagicMock()
+        conn = MagicMock()
+        conn.connect = MagicMock()
+        conn.execute = AsyncMock(return_value=[[1]])
+        pool.acquire = AsyncMock(return_value=conn)
+        pool.release = MagicMock()
+
+        config_connection = {"db_host": "h", "db_port": "p", "db_name": "n"}
+        config_query = {
+            "name": "q",
+            "query": "sql",
+            "max_rows": 5,
+            "gauges": [{"name": "m", "col": 1}],
+        }
+
+        with self.assertRaises(asyncio.CancelledError):
+            asyncio.run(query_set(config_connection, pool, config_query, exporter, 1))
+
+        conn.execute.assert_awaited_with("sql", "q", timeout=None, max_rows=5)
 
 if __name__ == '__main__':
     unittest.main()
