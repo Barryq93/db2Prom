@@ -2,6 +2,7 @@
 #os.add_dll_directory("D:\\Learning\\Code\\Python\\db2Prom\\.venv\\Lib\\site-packages\\clidriver\\bin")
 import ibm_db
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -42,14 +43,30 @@ class Db2Connection:
             self.exporter.set_gauge("db2_connection_status", 0)
             raise e
 
-    def execute(self, query: str, name: str):
+    async def execute(self, query: str, name: str, timeout: float | None = None):
         """
         Execute a SQL query and return the results.
+        The execution is offloaded to a thread using run_in_executor. If the
+        execution exceeds the provided timeout, the running thread is cancelled
+        and an error metric is emitted.
         """
         try:
             if not self.conn:
                 return []
-            result = ibm_db.exec_immediate(self.conn, query)
+
+            loop = asyncio.get_running_loop()
+            future = loop.run_in_executor(None, ibm_db.exec_immediate, self.conn, query)
+
+            try:
+                result = await asyncio.wait_for(future, timeout=timeout)
+            except asyncio.TimeoutError:
+                future.cancel()
+                logger.warning(
+                    f"[{self.connection_string_print}] [{name}] execution timed out"
+                )
+                self.exporter.set_gauge("db2_query_timeout", 1, {"query": name})
+                return [[]]
+
             logger.debug(f"[{self.connection_string_print}] [{name}] executed")
             rows = []
             row = list(ibm_db.fetch_tuple(result))

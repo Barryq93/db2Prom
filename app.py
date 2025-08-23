@@ -99,7 +99,11 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
             c_labels = {i: INVALID_LABEL_STR for i in max_conn_labels} | c_labels
 
             # Execute query and export metrics
-            res = conn.execute(config_query["query"], config_query["name"])
+            res = await conn.execute(
+                config_query["query"],
+                config_query["name"],
+                timeout=config_query.get("timeout"),
+            )
             g_counter = 0
             for g in config_query["gauges"]:
                 if "extra_labels" in g:
