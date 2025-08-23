@@ -115,7 +115,7 @@ class TestDb2Connection(unittest.TestCase):
     @patch('ibm_db.prepare')
     @patch('ibm_db.execute')
     def test_execute_timeout(self, mock_execute, mock_prepare):
-        """Test that a timeout emits an error metric and returns an empty result."""
+        """Test that a timeout emits an error metric and propagates."""
         def slow_exec(*args, **kwargs):
             time.sleep(0.05)
             return True
@@ -131,13 +131,32 @@ class TestDb2Connection(unittest.TestCase):
             exporter=mock_exporter,
         )
         db2_conn.conn = "mock_connection"
-        result = asyncio.run(
-            db2_conn.execute("SELECT * FROM table", "test_query", timeout=0.01)
-        )
-        self.assertEqual(result, [[]])
+        with self.assertRaises(asyncio.TimeoutError):
+            asyncio.run(
+                db2_conn.execute("SELECT * FROM table", "test_query", timeout=0.01)
+            )
         mock_exporter.set_gauge.assert_called_with(
             "db2_query_timeout", 1, {"query": "test_query"}
         )
+        self.assertIsNone(db2_conn.conn)
+
+    @patch('ibm_db.prepare')
+    def test_execute_exception_resets_connection(self, mock_prepare):
+        """Test that an execution exception resets the connection and propagates."""
+        mock_prepare.side_effect = Exception("prepare failed")
+        mock_exporter = MagicMock()
+        db2_conn = Db2Connection(
+            db_name="test_db",
+            db_hostname="localhost",
+            db_port="50000",
+            db_user="user",
+            db_passwd="pass",
+            exporter=mock_exporter,
+        )
+        db2_conn.conn = "mock_connection"
+        with self.assertRaises(Exception):
+            asyncio.run(db2_conn.execute("SELECT 1", "test_query"))
+        self.assertIsNone(db2_conn.conn)
 
     @patch('ibm_db.close')
     def test_close_connection(self, mock_close):

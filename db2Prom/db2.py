@@ -81,7 +81,8 @@ class Db2Connection:
                     f"[{self.connection_string_print}] [{name}] execution timed out"
                 )
                 self.exporter.set_gauge("db2_query_timeout", 1, {"query": name})
-                return [[]]
+                self.conn = None
+                raise
 
             logger.debug(f"[{self.connection_string_print}] [{name}] executed")
             rows = []
@@ -94,7 +95,8 @@ class Db2Connection:
             return rows
         except Exception as e:
             logger.warning(f"[{self.connection_string_print}] [{name}] failed to execute: {e}")
-            return [[]]
+            self.conn = None
+            raise
 
     def close(self):
         """
