@@ -45,6 +45,7 @@ class CustomExporter:
         self.create_gauge(
             "db2_connection_status",
             "Indicates whether the DB2 database is reachable (1 = reachable, 0 = unreachable)",
+            ["dbhost", "dbname"],
         )
 
         self.create_gauge(

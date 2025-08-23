@@ -42,7 +42,11 @@ class TestDb2Connection(unittest.TestCase):
         )
         db2_conn.connect()
         self.assertEqual(db2_conn.conn, "mock_connection")
-        mock_exporter.set_gauge.assert_called_with("db2_connection_status", 1)
+        mock_exporter.set_gauge.assert_called_with(
+            "db2_connection_status",
+            1,
+            {"dbhost": "localhost", "dbname": "test_db"},
+        )
 
     @patch('ibm_db.pconnect')
     def test_connect_failure(self, mock_pconnect):
@@ -60,7 +64,11 @@ class TestDb2Connection(unittest.TestCase):
         with self.assertRaises(Exception):
             db2_conn.connect()
         self.assertIsNone(db2_conn.conn)
-        mock_exporter.set_gauge.assert_called_with("db2_connection_status", 0)
+        mock_exporter.set_gauge.assert_called_with(
+            "db2_connection_status",
+            0,
+            {"dbhost": "localhost", "dbname": "test_db"},
+        )
 
     @patch('ibm_db.free_stmt')
     @patch('ibm_db.fetch_tuple')
