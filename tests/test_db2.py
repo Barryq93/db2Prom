@@ -136,12 +136,13 @@ class TestDb2Connection(unittest.TestCase):
         self.assertEqual(result, [[1, "data"]])
         mock_free_stmt.assert_called_once_with("mock_statement")
 
+    @patch('ibm_db.close')
     @patch('ibm_db.free_stmt')
     @patch('ibm_db.fetch_tuple')
     @patch('ibm_db.execute')
     @patch('ibm_db.prepare')
-    def test_execute_query_exception_calls_free_stmt(self, mock_prepare, mock_execute, mock_fetch_tuple, mock_free_stmt):
-        """Ensure free_stmt is called even when fetch raises an exception."""
+    def test_execute_query_exception_calls_free_stmt(self, mock_prepare, mock_execute, mock_fetch_tuple, mock_free_stmt, mock_close):
+        """Ensure free_stmt and close are called when fetch raises an exception."""
         mock_prepare.return_value = "mock_statement"
         mock_execute.return_value = True
         mock_fetch_tuple.side_effect = Exception("fetch failed")
@@ -163,6 +164,8 @@ class TestDb2Connection(unittest.TestCase):
         with self.assertRaises(Exception):
             asyncio.run(run())
         mock_free_stmt.assert_called_once_with("mock_statement")
+        mock_close.assert_called_once_with("mock_connection")
+        self.assertIsNone(db2_conn.conn)
 
     @patch('ibm_db.prepare')
     @patch('ibm_db.execute')
@@ -207,9 +210,10 @@ class TestDb2Connection(unittest.TestCase):
         gauge = exporter.metric_dict["db2_query_timeout"]
         self.assertIn("query", gauge._labelnames)
 
+    @patch('ibm_db.close')
     @patch('ibm_db.prepare')
-    def test_execute_exception_resets_connection(self, mock_prepare):
-        """Test that an execution exception resets the connection and propagates."""
+    def test_execute_exception_resets_connection(self, mock_prepare, mock_close):
+        """Test that an execution exception closes and resets the connection."""
         mock_prepare.side_effect = Exception("prepare failed")
         mock_exporter = MagicMock()
         db2_conn = Db2Connection(
@@ -228,6 +232,7 @@ class TestDb2Connection(unittest.TestCase):
 
         with self.assertRaises(Exception):
             asyncio.run(run())
+        mock_close.assert_called_once_with("mock_connection")
         self.assertIsNone(db2_conn.conn)
 
     @patch('ibm_db.close')
