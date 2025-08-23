@@ -70,6 +70,18 @@ queries:
           appstate: "$2" # Second column of query result will be set as this label's value
           appname: "$3" # Third column of query result will be set as this label's value
 
+  - name: "DB2 Start Time"
+    runs_on: [] # Query runs on every connection
+    time_interval: 60 # Check every 60 seconds
+    query: |
+      SELECT
+        UNIX_TIMESTAMP(DB2START_TIME) AS start_time
+      FROM TABLE (MON_GET_INSTANCE(-2))
+    gauges:
+      - name: "db2_up_since_seconds"
+        desc: "Unix timestamp when the DB2 instance started"
+        col: 1
+
 ###############################################
 # Connections
 ###############################################
