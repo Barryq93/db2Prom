@@ -8,6 +8,7 @@ import yaml
 import logging
 import asyncio
 import re
+import copy
 from logging.handlers import RotatingFileHandler
 from db2Prom.db2 import Db2Connection
 from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR
@@ -155,6 +156,19 @@ def load_config_yaml(file_str):
         logging.fatal(f"Could not open file {file_str}: {e}")
         sys.exit(1)
 
+def sanitize_config(config):
+    """
+    Return a deep copy of the configuration with password fields masked.
+    """
+    def mask(item):
+        if isinstance(item, dict):
+            return {k: ('******' if 'pass' in k.lower() else mask(v)) for k, v in item.items()}
+        if isinstance(item, list):
+            return [mask(i) for i in item]
+        return item
+
+    return mask(copy.deepcopy(config))
+
 def get_labels_list(config_connections):
     """
     Extracts a set of all unique connection labels.
@@ -236,7 +250,7 @@ if __name__ == '__main__':
     try:
         # Load global configuration from YAML file
         config = load_config_yaml(args.config_file)
-        logging.info(f"Loaded config: {config}")  # Logging loaded config
+        logging.info(f"Loaded config: {sanitize_config(config)}")  # Logging loaded config
         
         global_config = config["global_config"]
         log_level = logging.getLevelName(global_config.get("log_level", "INFO"))
