@@ -432,7 +432,13 @@ async def run_all(
         stop_event.set()
 
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, _signal_handler)
+        try:
+            loop.add_signal_handler(sig, _signal_handler)
+        except NotImplementedError:
+            try:
+                signal.signal(sig, lambda s, f: _signal_handler())
+            except (ValueError, AttributeError):
+                logging.debug("Signal handling not supported for %s; skipping.", sig)
 
     tasks = [
         asyncio.create_task(

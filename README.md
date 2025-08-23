@@ -117,6 +117,15 @@ You can then open `http://<exporter-host>:9877/` and see the exported metrics.
 
 Ctrl+c will stop the application.
 
+## Platform-specific signal handling
+
+`db2Prom` registers handlers for `SIGINT` and `SIGTERM` using
+`asyncio.loop.add_signal_handler` for graceful shutdown. Some platforms,
+such as the default Windows event loop, do not implement this API. In these
+cases the exporter falls back to `signal.signal` and, if even that is
+unavailable, skips signal registration entirely. This means graceful shutdown
+may not be possible on every platform.
+
 ## Running in Docker
 
 Clone this repo:
