@@ -19,6 +19,9 @@ class Db2Connection:
         self.connection_string_print = "{}:{}/{}".format(db_hostname, db_port, db_name)
         self.conn = None
         self.exporter = exporter  # Pass the exporter to emit metrics
+        # Store database details for metric labels
+        self.db_name = db_name
+        self.db_host = db_hostname
 
     def connect(self):
         """
@@ -30,18 +33,19 @@ class Db2Connection:
             ibm_db.SQL_ATTR_INFO_ACCTSTR: APPLICATION_NAME,
             ibm_db.SQL_ATTR_INFO_APPLNAME: APPLICATION_NAME
         }
+        labels = {"dbhost": self.db_host, "dbname": self.db_name}
         try:
             if not self.conn:
                 conn = ibm_db.pconnect(self.connection_string, "", "", options)
                 logger.info(f"[{self.connection_string_print}] connected")
                 self.conn = conn
                 # Emit metric indicating the database is reachable
-                self.exporter.set_gauge("db2_connection_status", 1)
+                self.exporter.set_gauge("db2_connection_status", 1, labels)
         except Exception as e:
             logger.error(f"[{self.connection_string_print}] {e}")
             self.conn = None
             # Emit metric indicating the database is unreachable
-            self.exporter.set_gauge("db2_connection_status", 0)
+            self.exporter.set_gauge("db2_connection_status", 0, labels)
             raise e
 
     async def execute(
