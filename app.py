@@ -123,9 +123,30 @@ def db2_instance_connection(config_connection, exporter):
 
     return Db2Connection(**conn)
 
-async def query_set(config_connection, pool, config_query, exporter, default_time_interval):
-    """
-    Asynchronous function to execute queries and export metrics.
+async def query_set(
+    config_connection,
+    pool,
+    config_query,
+    exporter,
+    default_time_interval,
+    max_conn_labels,
+):
+    """Execute a set of queries and export metrics.
+
+    Parameters
+    ----------
+    config_connection: dict
+        Connection configuration.
+    pool: ConnectionPool
+        Pool managing DB connections.
+    config_query: dict
+        Query configuration.
+    exporter: CustomExporter
+        Prometheus exporter instance.
+    default_time_interval: int
+        Default query execution interval.
+    max_conn_labels: set[str]
+        All known connection label keys used to prefill missing labels.
     """
     logging.info(
         f"Starting query set for: {config_query['name']} with interval {config_query.get('time_interval', default_time_interval)} seconds."
@@ -154,7 +175,9 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
             if "extra_labels" in config_connection:
                 c_labels.update(config_connection["extra_labels"])
 
-            max_conn_labels = {"dbhost", "dbenv", "dbname", "dbinstance", "dbport"}
+            # Prefill any missing connection labels so that all metrics share
+            # the same label set. ``max_conn_labels`` is computed from the
+            # configuration and provided by the caller.
             c_labels = {i: INVALID_LABEL_STR for i in max_conn_labels} | c_labels
 
             # Prepare gauge configurations for streaming processing
@@ -352,10 +375,19 @@ def start_prometheus_exporter(config_queries, max_conn_labels, port):
         logging.fatal(f"Could not start/init Prometheus Exporter server: {e}")
         raise e
 
-async def main(config_connection, config_queries, exporter, default_time_interval, port):
+async def main(
+    config_connection,
+    config_queries,
+    exporter,
+    default_time_interval,
+    port,
+    max_conn_labels,
+):
     """Coordinate query execution using a connection pool."""
     executions = []
-    pool = ConnectionPool(lambda: db2_instance_connection(config_connection, exporter), maxsize=10)
+    pool = ConnectionPool(
+        lambda: db2_instance_connection(config_connection, exporter), maxsize=10
+    )
     try:
         tags = set(config_connection.get("tags", []))
         for q in config_queries:
@@ -365,7 +397,14 @@ async def main(config_connection, config_queries, exporter, default_time_interva
             if "query" not in q:
                 raise Exception(f"{q} is missing 'query' key")
             executions.append(
-                query_set(config_connection, pool, q, exporter, default_time_interval)
+                query_set(
+                    config_connection,
+                    pool,
+                    q,
+                    exporter,
+                    default_time_interval,
+                    max_conn_labels,
+                )
             )
 
         await asyncio.gather(*executions)
@@ -376,7 +415,14 @@ async def main(config_connection, config_queries, exporter, default_time_interva
         await pool.close()
 
 
-async def run_all(config_connections, config_queries, exporter, default_time_interval, port):
+async def run_all(
+    config_connections,
+    config_queries,
+    exporter,
+    default_time_interval,
+    port,
+    max_conn_labels,
+):
     """Run query executors for all connections and handle termination signals."""
     loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
@@ -396,6 +442,7 @@ async def run_all(config_connections, config_queries, exporter, default_time_int
                 exporter,
                 default_time_interval,
                 port,
+                max_conn_labels,
             )
         )
         for config_connection in config_connections
@@ -457,6 +504,7 @@ if __name__ == '__main__':
                 exporter,
                 int(global_config["default_time_interval"]),
                 port,
+                max_conn_labels,
             )
         )
     except KeyError as ke:
