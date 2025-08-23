@@ -327,7 +327,11 @@ async def main(config_connection, config_queries, exporter, default_time_interva
     executions = []
     pool = ConnectionPool(lambda: db2_instance_connection(config_connection, exporter), maxsize=10)
     try:
+        tags = set(config_connection.get("tags", []))
         for q in config_queries:
+            runs_on = set(q.get("runs_on", []))
+            if runs_on and tags.isdisjoint(runs_on):
+                continue
             if "query" not in q:
                 raise Exception(f"{q} is missing 'query' key")
             executions.append(

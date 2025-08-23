@@ -44,6 +44,7 @@ from app import (
     sanitize_config,
     sanitize_label_value,
     query_set,
+    main,
 )
 from db2Prom.db2 import Db2Connection
 
@@ -215,6 +216,27 @@ class TestApp(unittest.TestCase):
             asyncio.run(query_set(config_connection, pool, config_query, exporter, 1))
 
         conn.execute.assert_awaited_with("sql", "q", None, timeout=None, max_rows=5)
+
+    @patch('app.ConnectionPool')
+    @patch('app.query_set', new_callable=AsyncMock)
+    def test_main_respects_runs_on_tags(self, mock_query_set, mock_conn_pool):
+        pool_instance = MagicMock()
+        pool_instance.close = AsyncMock()
+        mock_conn_pool.return_value = pool_instance
+
+        config_connection = {"tags": ["prod", "oltp"]}
+        config_queries = [
+            {"name": "q1", "query": "s1", "runs_on": ["prod"]},
+            {"name": "q2", "query": "s2", "runs_on": ["dev"]},
+            {"name": "q3", "query": "s3"},
+            {"name": "q4", "query": "s4", "runs_on": []},
+        ]
+        exporter = MagicMock()
+
+        asyncio.run(main(config_connection, config_queries, exporter, 1, 0))
+
+        called = {c.args[2]["name"] for c in mock_query_set.call_args_list}
+        self.assertEqual(called, {"q1", "q3", "q4"})
 
 if __name__ == '__main__':
     unittest.main()
