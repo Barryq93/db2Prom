@@ -21,6 +21,7 @@ queries:
   - name: "Lockwaits"
     runs_on: ["production"] # Query runs (and thus corresponding metrics are generated) only on connections with "production" tag
     time_interval: 10 # Will run this query every 10 seconds
+    timeout: 5 # Cancel the query if it runs longer than 5 seconds
     query: |
       select
         count(*) count,
