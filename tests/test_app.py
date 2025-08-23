@@ -49,9 +49,10 @@ from db2Prom.db2 import Db2Connection
 class TestApp(unittest.TestCase):
 
     @patch('os.makedirs')
+    @patch('logging.StreamHandler')
     @patch('app.RotatingFileHandler')
     @patch('logging.getLogger')
-    def test_setup_logging(self, mock_get_logger, mock_rotating_file_handler, mock_makedirs):
+    def test_setup_logging(self, mock_get_logger, mock_rotating_file_handler, mock_stream_handler, mock_makedirs):
         """
         Test that logging is set up correctly.
         """
@@ -59,12 +60,14 @@ class TestApp(unittest.TestCase):
         mock_logger = MagicMock()
         mock_get_logger.return_value = mock_logger
 
-        # Mock the RotatingFileHandler to avoid actual file creation
+        # Mock the handlers to avoid actual file creation and console output
         mock_handler = MagicMock()
         mock_rotating_file_handler.return_value = mock_handler
+        mock_stream = MagicMock()
+        mock_stream_handler.return_value = mock_stream
 
         # Call the function
-        setup_logging("/fake/log/path", "INFO")
+        setup_logging("/fake/log/path", "INFO", True)
 
         # Verify the directory was created
         mock_makedirs.assert_called_once_with("/fake/log/path", exist_ok=True)
@@ -78,7 +81,8 @@ class TestApp(unittest.TestCase):
         )
 
         # Verify the handlers were added to the logger
-        self.assertEqual(mock_logger.addHandler.call_count, 2)  # Main log handler and error log handler
+        self.assertEqual(mock_logger.addHandler.call_count, 3)  # Main, error, and console handlers
+        mock_stream_handler.assert_called_once()
 
     @patch('app.Db2Connection')
     def test_db2_instance_connection(self, mock_db2_connection):
