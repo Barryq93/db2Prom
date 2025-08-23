@@ -1,6 +1,7 @@
 from prometheus_client import start_http_server, Gauge, REGISTRY
 import logging
 import socket
+import time
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -10,7 +11,12 @@ INVALID_LABEL_STR = "-"
 
 
 class CustomExporter:
-    def __init__(self, port=9877, host=None):
+    def __init__(
+        self,
+        port: int = 9877,
+        host: str | None = None,
+        query_names: list | None = None,
+    ):
         """Initialize the Prometheus exporter.
 
         Parameters
@@ -20,16 +26,27 @@ class CustomExporter:
         host : str, optional
             Network interface to bind the HTTP server to. If not provided,
             the exporter will bind to the current machine's hostname.
+        query_names : list, optional
+            Sanitized query names from the configuration. A cache of last
+            successful run timestamps will be initialised with these names to
+            ensure metrics exist even before a query runs.
         """
-        self.metric_dict = {}
+        self.metric_dict: dict[str, Gauge] = {}
         self.port = port
         self.host = host or socket.gethostname()
+        self.query_last_success: dict[str, float] = {}
+
         # Check if the metric already exists before creating it
         if "db2_connection_status" not in REGISTRY._names_to_collectors:
             self.create_gauge(
                 "db2_connection_status",
                 "Indicates whether the DB2 database is reachable (1 = reachable, 0 = unreachable)",
             )
+
+        # Initialize cache for each configured query
+        if query_names:
+            for q in query_names:
+                self.query_last_success[q] = 0.0
 
     def create_gauge(self, metric_name: str, metric_desc: str, metric_labels: list = []):
         """
@@ -57,6 +74,16 @@ class CustomExporter:
             logger.debug(f"[GAUGE] [{metric_name}{{{labels_str}}}] {metric_value}")
         except Exception as e:
             logger.error(f"[GAUGE] [{metric_name}] failed to update: {e}")
+
+    def record_query_duration(self, query: str, duration: float) -> None:
+        """Record execution time for a query."""
+        self.set_gauge("db2_query_duration_seconds", duration, {"query": query})
+
+    def record_query_success(self, query: str) -> None:
+        """Update the last successful run timestamp for a query."""
+        timestamp = time.time()
+        self.query_last_success[query] = timestamp
+        self.set_gauge("db2_query_last_success_timestamp", timestamp, {"query": query})
 
     def start(self):
         """Start the Prometheus HTTP server."""
