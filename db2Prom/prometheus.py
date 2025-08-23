@@ -83,10 +83,16 @@ class CustomExporter:
         except Exception as e:
             logger.error(f"[GAUGE] [{metric_name}] failed to create: {e}")
 
-    def set_gauge(self, metric_name: str, metric_value: float, metric_labels: dict = {}):
+    def set_gauge(
+        self,
+        metric_name: str,
+        metric_value: float,
+        metric_labels: dict | None = None,
+    ):
         """
         Set the value of a Prometheus gauge metric.
         """
+        metric_labels = metric_labels or {}
         try:
             if metric_labels:
                 self.metric_dict[metric_name].labels(**metric_labels).set(metric_value)
