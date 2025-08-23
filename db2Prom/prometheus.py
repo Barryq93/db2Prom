@@ -40,6 +40,21 @@ class CustomExporter:
                 "db2_connection_status",
                 "Indicates whether the DB2 database is reachable (1 = reachable, 0 = unreachable)",
             )
+        else:
+            self.metric_dict["db2_connection_status"] = REGISTRY._names_to_collectors[
+                "db2_connection_status"
+            ]
+
+        if "db2_query_timeout" not in REGISTRY._names_to_collectors:
+            self.create_gauge(
+                "db2_query_timeout",
+                "Indicates that a query execution has timed out (1 = timeout)",
+                ["query"],
+            )
+        else:
+            self.metric_dict["db2_query_timeout"] = REGISTRY._names_to_collectors[
+                "db2_query_timeout"
+            ]
 
         # Initialize cache for each configured query
         if query_names:
