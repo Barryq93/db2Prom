@@ -2,3 +2,4 @@ ibm-db
 prometheus-client
 pyyaml
 asyncio
+pytest

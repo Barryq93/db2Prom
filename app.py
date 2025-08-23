@@ -15,6 +15,14 @@ from db2Prom.db2 import Db2Connection
 from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR
 from db2Prom.connection_pool import ConnectionPool
 
+
+class ConfigError(Exception):
+    """Custom exception type for configuration-related errors."""
+
+    def __init__(self, message: str, exit_code: int = 1) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
+
 # Maximum length for a Prometheus label value
 MAX_LABEL_LENGTH = 100
 
@@ -106,19 +114,20 @@ def db2_instance_connection(config_connection, exporter):
     """
     logging.info("Setting up DB2 connection with provided configuration.")
     conn = {
-        "db_name": config_connection["db_name"],
-        "db_hostname": config_connection["db_host"],
-        "db_port": config_connection["db_port"],
-        "db_user": config_connection["db_user"],
-        "db_passwd": config_connection["db_passwd"],
+        "db_name": config_connection.get("db_name"),
+        "db_hostname": config_connection.get("db_host"),
+        "db_port": config_connection.get("db_port"),
+        "db_user": config_connection.get("db_user"),
+        "db_passwd": config_connection.get("db_passwd"),
         "exporter": exporter  # Pass the exporter to Db2Connection for emitting metrics
     }
 
     # Validate connection parameters
     for key, value in conn.items():
         if not value and key != "exporter":  # Exclude exporter from validation
-            logging.fatal(f"Missing {key} field for connection.")
-            sys.exit(1)
+            msg = f"Missing {key} field for connection."
+            logging.fatal(msg)
+            raise ConfigError(msg)
 
     return Db2Connection(**conn)
 
@@ -272,18 +281,22 @@ def load_config_yaml(file_str):
         with open(file_str, "r") as f:
             file_dict = yaml.safe_load(f)
             if not isinstance(file_dict, dict):
-                logging.fatal(f"Could not parse '{file_str}' as dict")
-                sys.exit(1)
+                msg = f"Could not parse '{file_str}' as dict"
+                logging.fatal(msg)
+                raise ConfigError(msg)
             return file_dict
     except yaml.YAMLError as e:
-        logging.fatal(f"File {file_str} is not a valid YAML: {e}")
-        sys.exit(1)
+        msg = f"File {file_str} is not a valid YAML: {e}"
+        logging.fatal(msg)
+        raise ConfigError(msg)
     except FileNotFoundError:
-        logging.fatal(f"File {file_str} not found")
-        sys.exit(1)
+        msg = f"File {file_str} not found"
+        logging.fatal(msg)
+        raise ConfigError(msg)
     except Exception as e:
-        logging.fatal(f"Could not open file {file_str}: {e}")
-        sys.exit(1)
+        msg = f"Could not open file {file_str}: {e}"
+        logging.fatal(msg)
+        raise ConfigError(msg)
 
 def sanitize_config(config):
     """Return a copy of the configuration with password fields masked.
@@ -465,15 +478,14 @@ if __name__ == '__main__':
     parser.add_argument('config_file', type=str, help='Path to the config YAML file')
     args = parser.parse_args()
 
-    if not args.config_file:
-        logging.error("Error: Configuration file argument is missing.")
-        sys.exit(1)
-
     try:
+        if not args.config_file:
+            raise ConfigError("Error: Configuration file argument is missing.")
+
         # Load global configuration from YAML file
         config = load_config_yaml(args.config_file)
         logging.info(f"Loaded config: {sanitize_config(config)}")  # Logging loaded config
-        
+
         global_config = config["global_config"]
         log_level = logging.getLevelName(global_config.get("log_level", "INFO"))
         log_path = global_config.get("log_path", "/path/to/logs/")
@@ -487,16 +499,16 @@ if __name__ == '__main__':
         # Validate global configuration variables
         if int(global_config.get("default_time_interval", 15)) < 1:
             logging.fatal("Invalid value for default_time_interval")
-            sys.exit(2)
-        
+            raise ConfigError("Invalid value for default_time_interval", exit_code=2)
+
         # Load YAML files for DB2 connections and queries
         config_connections = config["connections"]
         config_queries = config["queries"]
-        
+
         # Get set of all connection labels
         max_conn_labels = get_labels_list(config_connections)
         logging.info(f"Max connection labels: {max_conn_labels}")  # Logging max connection labels
-        
+
         # Start Prometheus exporter and initialize metrics
         exporter = start_prometheus_exporter(config_queries, max_conn_labels, port)
 
@@ -511,6 +523,9 @@ if __name__ == '__main__':
                 max_conn_labels,
             )
         )
+    except ConfigError as e:
+        logging.critical(str(e))
+        sys.exit(e.exit_code)
     except KeyError as ke:
         logging.critical(f"{ke.args[0]} not found in global_config. Check configuration.")
         sys.exit(1)
