@@ -3,6 +3,7 @@
 import ibm_db
 import logging
 import asyncio
+import contextlib
 from typing import AsyncIterator
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ class Db2Connection:
                 return
 
             loop = asyncio.get_running_loop()
-            queue: asyncio.Queue = asyncio.Queue()
+            queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
             sentinel = object()
             errors: list[Exception] = []
             stmt_holder: dict[str, object | None] = {"stmt": None}
@@ -101,31 +102,47 @@ class Db2Connection:
 
             future = loop.run_in_executor(None, run_query)
 
-            while True:
-                try:
-                    item = await asyncio.wait_for(queue.get(), timeout=timeout)
-                except asyncio.TimeoutError:
-                    stmt = stmt_holder["stmt"]
-                    if stmt is not None:
-                        try:
-                            if hasattr(ibm_db, "cancel"):
-                                ibm_db.cancel(stmt)
-                            else:
-                                ibm_db.close(self.conn)
-                        except Exception:
-                            pass
-                    future.cancel()
-                    logger.warning(
-                        f"[{self.connection_string_print}] [{name}] execution timed out"
-                    )
-                    self.exporter.set_gauge("db2_query_timeout", 1, {"query": name})
-                    self.conn = None
-                    raise
-                if item is sentinel:
-                    break
-                yield item
-
-            await future
+            try:
+                while True:
+                    try:
+                        item = await asyncio.wait_for(queue.get(), timeout=timeout)
+                    except asyncio.TimeoutError:
+                        stmt = stmt_holder["stmt"]
+                        if stmt is not None:
+                            try:
+                                if hasattr(ibm_db, "cancel"):
+                                    ibm_db.cancel(stmt)
+                                else:
+                                    ibm_db.close(self.conn)
+                            except Exception:
+                                pass
+                        future.cancel()
+                        logger.warning(
+                            f"[{self.connection_string_print}] [{name}] execution timed out"
+                        )
+                        self.exporter.set_gauge("db2_query_timeout", 1, {"query": name})
+                        self.conn = None
+                        raise
+                    if item is sentinel:
+                        break
+                    yield item
+            finally:
+                future.cancel()
+                stmt = stmt_holder["stmt"]
+                if stmt is not None:
+                    try:
+                        ibm_db.free_stmt(stmt)
+                    except Exception:
+                        pass
+                    finally:
+                        stmt_holder["stmt"] = None
+                while not queue.empty():
+                    try:
+                        queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await future
             if errors:
                 raise errors[0]
 
