@@ -47,6 +47,7 @@ class Db2Connection:
         self,
         query: str,
         name: str,
+        params: list | tuple | None = None,
         timeout: float | None = None,
         max_rows: int | None = None,
     ):
@@ -61,7 +62,16 @@ class Db2Connection:
                 return []
 
             loop = asyncio.get_running_loop()
-            future = loop.run_in_executor(None, ibm_db.exec_immediate, self.conn, query)
+
+            def run_query():
+                stmt = ibm_db.prepare(self.conn, query)
+                if params is not None:
+                    ibm_db.execute(stmt, params)
+                else:
+                    ibm_db.execute(stmt)
+                return stmt
+
+            future = loop.run_in_executor(None, run_query)
 
             try:
                 result = await asyncio.wait_for(future, timeout=timeout)

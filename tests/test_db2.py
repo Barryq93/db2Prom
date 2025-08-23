@@ -13,7 +13,8 @@ ibm_db_mock = types.SimpleNamespace(
     SQL_ATTR_INFO_ACCTSTR=0,
     SQL_ATTR_INFO_APPLNAME=0,
     pconnect=MagicMock(),
-    exec_immediate=MagicMock(),
+    prepare=MagicMock(),
+    execute=MagicMock(),
     fetch_tuple=MagicMock(),
     close=MagicMock(),
 )
@@ -59,11 +60,13 @@ class TestDb2Connection(unittest.TestCase):
         self.assertIsNone(db2_conn.conn)
         mock_exporter.set_gauge.assert_called_with("db2_connection_status", 0)
 
-    @patch('ibm_db.exec_immediate')
+    @patch('ibm_db.prepare')
+    @patch('ibm_db.execute')
     @patch('ibm_db.fetch_tuple')
-    def test_execute_query(self, mock_fetch_tuple, mock_exec_immediate):
+    def test_execute_query(self, mock_fetch_tuple, mock_execute, mock_prepare):
         """Test that a SQL query is executed successfully."""
-        mock_exec_immediate.return_value = "mock_statement"
+        mock_prepare.return_value = "mock_statement"
+        mock_execute.return_value = True
         mock_fetch_tuple.side_effect = [[1, "data"], None]
         mock_exporter = MagicMock()
         db2_conn = Db2Connection(
@@ -75,14 +78,22 @@ class TestDb2Connection(unittest.TestCase):
             exporter=mock_exporter,
         )
         db2_conn.conn = "mock_connection"
-        result = asyncio.run(db2_conn.execute("SELECT * FROM table", "test_query"))
+        result = asyncio.run(
+            db2_conn.execute(
+                "SELECT * FROM table WHERE id = ?",
+                "test_query",
+                params=[1],
+            )
+        )
         self.assertEqual(result, [[1, "data"]])
 
-    @patch('ibm_db.exec_immediate')
+    @patch('ibm_db.prepare')
+    @patch('ibm_db.execute')
     @patch('ibm_db.fetch_tuple')
-    def test_execute_query_max_rows(self, mock_fetch_tuple, mock_exec_immediate):
+    def test_execute_query_max_rows(self, mock_fetch_tuple, mock_execute, mock_prepare):
         """Test that max_rows limits the number of returned rows."""
-        mock_exec_immediate.return_value = "mock_statement"
+        mock_prepare.return_value = "mock_statement"
+        mock_execute.return_value = True
         mock_fetch_tuple.side_effect = [[1, "data"], [2, "data2"], None]
         mock_exporter = MagicMock()
         db2_conn = Db2Connection(
@@ -95,17 +106,21 @@ class TestDb2Connection(unittest.TestCase):
         )
         db2_conn.conn = "mock_connection"
         result = asyncio.run(
-            db2_conn.execute("SELECT * FROM table", "test_query", max_rows=1)
+            db2_conn.execute(
+                "SELECT * FROM table", "test_query", max_rows=1
+            )
         )
         self.assertEqual(result, [[1, "data"]])
 
-    @patch('ibm_db.exec_immediate')
-    def test_execute_timeout(self, mock_exec_immediate):
+    @patch('ibm_db.prepare')
+    @patch('ibm_db.execute')
+    def test_execute_timeout(self, mock_execute, mock_prepare):
         """Test that a timeout emits an error metric and returns an empty result."""
         def slow_exec(*args, **kwargs):
             time.sleep(0.05)
-            return "mock_statement"
-        mock_exec_immediate.side_effect = slow_exec
+            return True
+        mock_prepare.return_value = "mock_statement"
+        mock_execute.side_effect = slow_exec
         mock_exporter = MagicMock()
         db2_conn = Db2Connection(
             db_name="test_db",

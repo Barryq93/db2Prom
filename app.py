@@ -163,6 +163,7 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
             res = await conn.execute(
                 config_query["query"],
                 config_query["name"],
+                config_query.get("params"),
                 timeout=config_query.get("timeout"),
                 max_rows=config_query.get("max_rows"),
             )

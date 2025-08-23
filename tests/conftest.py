@@ -1,4 +1,5 @@
 import sys
+import sys
 import types
 import pytest
 
@@ -14,7 +15,8 @@ def _dummy(*args, **kwargs):  # pragma: no cover - simple placeholder
     return object()
 
 ibm_db.pconnect = _dummy
-ibm_db.exec_immediate = _dummy
+ibm_db.prepare = _dummy
+ibm_db.execute = _dummy
 ibm_db.fetch_tuple = lambda stmt: ()
 ibm_db.close = lambda conn: True
 

@@ -30,7 +30,8 @@ ibm_db_stub = types.SimpleNamespace(
     SQL_ATTR_INFO_ACCTSTR=0,
     SQL_ATTR_INFO_APPLNAME=0,
     pconnect=MagicMock(),
-    exec_immediate=MagicMock(),
+    prepare=MagicMock(),
+    execute=MagicMock(),
     fetch_tuple=MagicMock(),
     close=MagicMock(),
 )
@@ -213,7 +214,7 @@ class TestApp(unittest.TestCase):
         with self.assertRaises(asyncio.CancelledError):
             asyncio.run(query_set(config_connection, pool, config_query, exporter, 1))
 
-        conn.execute.assert_awaited_with("sql", "q", timeout=None, max_rows=5)
+        conn.execute.assert_awaited_with("sql", "q", None, timeout=None, max_rows=5)
 
 if __name__ == '__main__':
     unittest.main()
