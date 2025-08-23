@@ -70,11 +70,13 @@ class Db2Connection:
             queue: asyncio.Queue = asyncio.Queue()
             sentinel = object()
             errors: list[Exception] = []
+            stmt_holder: dict[str, object | None] = {"stmt": None}
 
             def run_query():
                 stmt = None
                 try:
                     stmt = ibm_db.prepare(self.conn, query)
+                    stmt_holder["stmt"] = stmt
                     if params is not None:
                         ibm_db.execute(stmt, params)
                     else:
@@ -91,7 +93,10 @@ class Db2Connection:
                     errors.append(exc)
                 finally:
                     if stmt is not None:
-                        ibm_db.free_stmt(stmt)
+                        try:
+                            ibm_db.free_stmt(stmt)
+                        finally:
+                            stmt_holder["stmt"] = None
                     loop.call_soon_threadsafe(queue.put_nowait, sentinel)
 
             future = loop.run_in_executor(None, run_query)
@@ -100,6 +105,15 @@ class Db2Connection:
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=timeout)
                 except asyncio.TimeoutError:
+                    stmt = stmt_holder["stmt"]
+                    if stmt is not None:
+                        try:
+                            if hasattr(ibm_db, "cancel"):
+                                ibm_db.cancel(stmt)
+                            else:
+                                ibm_db.close(self.conn)
+                        except Exception:
+                            pass
                     future.cancel()
                     logger.warning(
                         f"[{self.connection_string_print}] [{name}] execution timed out"
