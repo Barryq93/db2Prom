@@ -322,22 +322,49 @@ async def main(config_connection, config_queries, exporter, default_time_interva
         for q in config_queries:
             if "query" not in q:
                 raise Exception(f"{q} is missing 'query' key")
-            executions.append(query_set(config_connection, pool, q, exporter, default_time_interval))
+            executions.append(
+                query_set(config_connection, pool, q, exporter, default_time_interval)
+            )
 
         await asyncio.gather(*executions)
-    except KeyboardInterrupt:
-        logging.info("Received KeyboardInterrupt, shutting down.")
-        return None
+    except asyncio.CancelledError:
+        logging.info("Connection task cancelled, shutting down.")
+        raise
     finally:
         await pool.close()
 
-def signal_handler(sig, frame):
-    """
-    Handles termination signals (e.g., Ctrl+C) gracefully.
-    """
-    logging.info("Received termination signal, shutting down gracefully.")
-    loop.stop()
-    sys.exit(0)
+
+async def run_all(config_connections, config_queries, exporter, default_time_interval, port):
+    """Run query executors for all connections and handle termination signals."""
+    loop = asyncio.get_running_loop()
+    stop_event = asyncio.Event()
+
+    def _signal_handler():
+        logging.info("Received termination signal, shutting down gracefully.")
+        stop_event.set()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, _signal_handler)
+
+    tasks = [
+        asyncio.create_task(
+            main(
+                config_connection,
+                config_queries,
+                exporter,
+                default_time_interval,
+                port,
+            )
+        )
+        for config_connection in config_connections
+    ]
+
+    await stop_event.wait()
+
+    for t in tasks:
+        t.cancel()
+
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 if __name__ == '__main__':
     # Command-line argument parsing and main execution flow
@@ -381,19 +408,17 @@ if __name__ == '__main__':
         
         # Start Prometheus exporter and initialize metrics
         exporter = start_prometheus_exporter(config_queries, max_conn_labels, port)
-        
-        # Setup signal handler for graceful shutdown
-        signal.signal(signal.SIGINT, signal_handler)
-        
-        # Start asyncio event loop and run main tasks
-        try:
-            loop = asyncio.get_event_loop()
-            tasks = []
-            for config_connection in config_connections:
-                tasks.append(main(config_connection, config_queries, exporter, int(global_config["default_time_interval"]), port))
-            loop.run_until_complete(asyncio.gather(*tasks))
-        except KeyboardInterrupt:
-            logging.info("Received KeyboardInterrupt, shutting down.")
+
+        # Run all tasks with asyncio.run for automatic loop management
+        asyncio.run(
+            run_all(
+                config_connections,
+                config_queries,
+                exporter,
+                int(global_config["default_time_interval"]),
+                port,
+            )
+        )
     except KeyError as ke:
         logging.critical(f"{ke.args[0]} not found in global_config. Check configuration.")
         sys.exit(1)
