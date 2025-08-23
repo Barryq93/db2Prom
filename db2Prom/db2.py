@@ -3,6 +3,7 @@
 import ibm_db
 import logging
 import asyncio
+from typing import AsyncIterator
 
 logger = logging.getLogger(__name__)
 
@@ -50,51 +51,68 @@ class Db2Connection:
         params: list | tuple | None = None,
         timeout: float | None = None,
         max_rows: int | None = None,
-    ):
+    ) -> AsyncIterator[list]:
         """
-        Execute a SQL query and return the results.
+        Execute a SQL query and yield the results incrementally.
         The execution is offloaded to a thread using run_in_executor. If the
         execution exceeds the provided timeout, the running thread is cancelled
         and an error metric is emitted.
         """
         try:
             if not self.conn:
-                return []
+                return
 
             loop = asyncio.get_running_loop()
+            queue: asyncio.Queue = asyncio.Queue()
+            sentinel = object()
+            errors: list[Exception] = []
 
             def run_query():
-                stmt = ibm_db.prepare(self.conn, query)
-                if params is not None:
-                    ibm_db.execute(stmt, params)
-                else:
-                    ibm_db.execute(stmt)
-                return stmt
+                try:
+                    stmt = ibm_db.prepare(self.conn, query)
+                    if params is not None:
+                        ibm_db.execute(stmt, params)
+                    else:
+                        ibm_db.execute(stmt)
+                    row_count = 0
+                    row = ibm_db.fetch_tuple(stmt)
+                    while row:
+                        loop.call_soon_threadsafe(queue.put_nowait, list(row))
+                        row_count += 1
+                        if max_rows is not None and row_count >= max_rows:
+                            break
+                        row = ibm_db.fetch_tuple(stmt)
+                except Exception as exc:  # Capture exceptions from thread
+                    errors.append(exc)
+                finally:
+                    loop.call_soon_threadsafe(queue.put_nowait, sentinel)
 
             future = loop.run_in_executor(None, run_query)
 
-            try:
-                result = await asyncio.wait_for(future, timeout=timeout)
-            except asyncio.TimeoutError:
-                future.cancel()
-                logger.warning(
-                    f"[{self.connection_string_print}] [{name}] execution timed out"
-                )
-                self.exporter.set_gauge("db2_query_timeout", 1, {"query": name})
-                self.conn = None
-                raise
+            while True:
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=timeout)
+                except asyncio.TimeoutError:
+                    future.cancel()
+                    logger.warning(
+                        f"[{self.connection_string_print}] [{name}] execution timed out"
+                    )
+                    self.exporter.set_gauge("db2_query_timeout", 1, {"query": name})
+                    self.conn = None
+                    raise
+                if item is sentinel:
+                    break
+                yield item
+
+            await future
+            if errors:
+                raise errors[0]
 
             logger.debug(f"[{self.connection_string_print}] [{name}] executed")
-            rows = []
-            row = ibm_db.fetch_tuple(result)
-            while row:
-                rows.append(list(row))
-                if max_rows is not None and len(rows) >= max_rows:
-                    break
-                row = ibm_db.fetch_tuple(result)
-            return rows
         except Exception as e:
-            logger.warning(f"[{self.connection_string_print}] [{name}] failed to execute: {e}")
+            logger.warning(
+                f"[{self.connection_string_print}] [{name}] failed to execute: {e}"
+            )
             self.conn = None
             raise
 

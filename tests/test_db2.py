@@ -78,13 +78,18 @@ class TestDb2Connection(unittest.TestCase):
             exporter=mock_exporter,
         )
         db2_conn.conn = "mock_connection"
-        result = asyncio.run(
-            db2_conn.execute(
-                "SELECT * FROM table WHERE id = ?",
-                "test_query",
-                params=[1],
-            )
-        )
+
+        async def run():
+            return [
+                row
+                async for row in db2_conn.execute(
+                    "SELECT * FROM table WHERE id = ?",
+                    "test_query",
+                    params=[1],
+                )
+            ]
+
+        result = asyncio.run(run())
         self.assertEqual(result, [[1, "data"]])
 
     @patch('ibm_db.prepare')
@@ -105,11 +110,16 @@ class TestDb2Connection(unittest.TestCase):
             exporter=mock_exporter,
         )
         db2_conn.conn = "mock_connection"
-        result = asyncio.run(
-            db2_conn.execute(
-                "SELECT * FROM table", "test_query", max_rows=1
-            )
-        )
+
+        async def run():
+            return [
+                row
+                async for row in db2_conn.execute(
+                    "SELECT * FROM table", "test_query", max_rows=1
+                )
+            ]
+
+        result = asyncio.run(run())
         self.assertEqual(result, [[1, "data"]])
 
     @patch('ibm_db.prepare')
@@ -131,10 +141,15 @@ class TestDb2Connection(unittest.TestCase):
             exporter=mock_exporter,
         )
         db2_conn.conn = "mock_connection"
+
+        async def run():
+            async for _ in db2_conn.execute(
+                "SELECT * FROM table", "test_query", timeout=0.01
+            ):
+                pass
+
         with self.assertRaises(asyncio.TimeoutError):
-            asyncio.run(
-                db2_conn.execute("SELECT * FROM table", "test_query", timeout=0.01)
-            )
+            asyncio.run(run())
         mock_exporter.set_gauge.assert_called_with(
             "db2_query_timeout", 1, {"query": "test_query"}
         )
@@ -154,8 +169,13 @@ class TestDb2Connection(unittest.TestCase):
             exporter=mock_exporter,
         )
         db2_conn.conn = "mock_connection"
+
+        async def run():
+            async for _ in db2_conn.execute("SELECT 1", "test_query"):
+                pass
+
         with self.assertRaises(Exception):
-            asyncio.run(db2_conn.execute("SELECT 1", "test_query"))
+            asyncio.run(run())
         self.assertIsNone(db2_conn.conn)
 
     @patch('ibm_db.close')
