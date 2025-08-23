@@ -226,6 +226,9 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
                 exporter.record_query_duration(query_label, duration)
             success = False
             logging.error(f"Error executing query {config_query['name']}: {e}")
+            exporter.inc_counter(
+                "db2_query_failures_total", {"query": query_label}
+            )
         finally:
             pool.release(conn)
             if success:
@@ -318,12 +321,20 @@ def start_prometheus_exporter(config_queries, max_conn_labels, port):
             "Indicates that a query execution has timed out (1 = timeout)",
             ["query"],
         )
+        custom_exporter.create_counter(
+            "db2_query_failures_total",
+            "Total number of DB2 query execution failures",
+            ["query"],
+        )
         for q in query_names:
             labels = {"query": q}
             custom_exporter.set_gauge("db2_query_duration_seconds", 0.0, labels)
             custom_exporter.set_gauge("db2_query_last_success_timestamp", 0.0, labels)
             # Initialize timeout gauge to 0 for each query
             custom_exporter.set_gauge("db2_query_timeout", 0, labels)
+            custom_exporter.inc_counter(
+                "db2_query_failures_total", labels, 0
+            )
         for q in config_queries:
             if "gauges" not in q:
                 raise Exception(f"{q} is missing 'gauges' key")

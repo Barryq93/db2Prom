@@ -1,7 +1,10 @@
+from typing import Any
+
 from prometheus_client import (
     start_http_server,
     Gauge,
     CollectorRegistry,
+    Counter,
 )
 import logging
 import socket
@@ -33,7 +36,7 @@ class CustomExporter:
             successful run timestamps will be initialised with these names to
             ensure metrics exist even before a query runs.
         """
-        self.metric_dict: dict[str, Gauge] = {}
+        self.metric_dict: dict[str, Any] = {}
         self.port = port
         self.host = host or socket.gethostname()
         # Use a dedicated registry so metrics from different exporter instances
@@ -83,6 +86,28 @@ class CustomExporter:
         except Exception as e:
             logger.error(f"[GAUGE] [{metric_name}] failed to create: {e}")
 
+    def create_counter(
+        self,
+        metric_name: str,
+        metric_desc: str,
+        metric_labels: list | None = None,
+    ):
+        """Create a new Prometheus counter metric."""
+        metric_labels = metric_labels or []
+        try:
+            if metric_labels:
+                counter = Counter(
+                    metric_name, metric_desc, metric_labels, registry=self.registry
+                )
+            else:
+                counter = Counter(metric_name, metric_desc, registry=self.registry)
+            self.metric_dict[metric_name] = counter
+            logger.info(f"[COUNTER] [{metric_name}] created")
+        except ValueError as e:
+            logger.warning(f"[COUNTER] [{metric_name}] already exists: {e}")
+        except Exception as e:
+            logger.error(f"[COUNTER] [{metric_name}] failed to create: {e}")
+
     def set_gauge(
         self,
         metric_name: str,
@@ -102,6 +127,26 @@ class CustomExporter:
             logger.debug(f"[GAUGE] [{metric_name}{{{labels_str}}}] {metric_value}")
         except Exception as e:
             logger.error(f"[GAUGE] [{metric_name}] failed to update: {e}")
+
+    def inc_counter(
+        self,
+        metric_name: str,
+        metric_labels: dict | None = None,
+        amount: float = 1.0,
+    ):
+        """Increment a Prometheus counter metric."""
+        metric_labels = metric_labels or {}
+        try:
+            if metric_labels:
+                self.metric_dict[metric_name].labels(**metric_labels).inc(amount)
+            else:
+                self.metric_dict[metric_name].inc(amount)
+            labels_str = ', '.join(f'{key}: "{value}"' for key, value in metric_labels.items())
+            logger.debug(
+                f"[COUNTER] [{metric_name}{{{labels_str}}}] +{amount}"
+            )
+        except Exception as e:
+            logger.error(f"[COUNTER] [{metric_name}] failed to increment: {e}")
 
     def record_query_duration(self, query: str, duration: float) -> None:
         """Record execution time for a query."""
