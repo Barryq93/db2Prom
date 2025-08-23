@@ -6,6 +6,7 @@ from unittest.mock import patch, MagicMock, mock_open, AsyncMock
 import os
 import logging
 
+import app as app_module
 # Minimal stubs for external dependencies so tests run without optional packages
 class _Gauge:
     def __init__(self, *args, **kwargs):
@@ -58,8 +59,12 @@ class TestApp(unittest.TestCase):
         """
         Test that logging is set up correctly.
         """
+        # Reset module-level flag
+        app_module._LOGGING_CONFIGURED = False
+
         # Mock the logger and file system operations
         mock_logger = MagicMock()
+        mock_logger.handlers = [MagicMock()]
         mock_get_logger.return_value = mock_logger
 
         # Mock the handlers to avoid actual file creation and console output
@@ -68,8 +73,11 @@ class TestApp(unittest.TestCase):
         mock_stream = MagicMock()
         mock_stream_handler.return_value = mock_stream
 
-        # Call the function
+        # First call should configure logging and clear existing handlers
         setup_logging("/fake/log/path", "INFO", True)
+
+        # Verify existing handlers were cleared
+        self.assertEqual(mock_logger.handlers, [])
 
         # Verify the directory was created
         mock_makedirs.assert_called_once_with("/fake/log/path", exist_ok=True)
@@ -85,6 +93,10 @@ class TestApp(unittest.TestCase):
         # Verify the handlers were added to the logger
         self.assertEqual(mock_logger.addHandler.call_count, 3)  # Main, error, and console handlers
         mock_stream_handler.assert_called_once()
+
+        # Second call should be a no-op due to guard flag
+        setup_logging("/fake/log/path", "INFO", True)
+        self.assertEqual(mock_logger.addHandler.call_count, 3)
 
     @patch('app.Db2Connection')
     def test_db2_instance_connection(self, mock_db2_connection):
