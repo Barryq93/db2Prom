@@ -21,6 +21,7 @@ ibm_db_mock = types.SimpleNamespace(
 sys.modules.setdefault("ibm_db", ibm_db_mock)
 
 from db2Prom.db2 import Db2Connection
+from db2Prom.prometheus import CustomExporter
 
 
 class TestDb2Connection(unittest.TestCase):
@@ -131,14 +132,14 @@ class TestDb2Connection(unittest.TestCase):
             return True
         mock_prepare.return_value = "mock_statement"
         mock_execute.side_effect = slow_exec
-        mock_exporter = MagicMock()
+        exporter = CustomExporter()
         db2_conn = Db2Connection(
             db_name="test_db",
             db_hostname="localhost",
             db_port="50000",
             db_user="user",
             db_passwd="pass",
-            exporter=mock_exporter,
+            exporter=exporter,
         )
         db2_conn.conn = "mock_connection"
 
@@ -150,10 +151,20 @@ class TestDb2Connection(unittest.TestCase):
 
         with self.assertRaises(asyncio.TimeoutError):
             asyncio.run(run())
-        mock_exporter.set_gauge.assert_called_with(
-            "db2_query_timeout", 1, {"query": "test_query"}
+        gauge_value = (
+            exporter.metric_dict["db2_query_timeout"]
+            .labels(query="test_query")
+            ._value.get()
         )
+        self.assertEqual(gauge_value, 1)
         self.assertIsNone(db2_conn.conn)
+
+    def test_exporter_initializes_query_timeout_gauge(self):
+        """Ensure exporter creates the db2_query_timeout gauge."""
+        exporter = CustomExporter()
+        self.assertIn("db2_query_timeout", exporter.metric_dict)
+        gauge = exporter.metric_dict["db2_query_timeout"]
+        self.assertIn("query", gauge._labelnames)
 
     @patch('ibm_db.prepare')
     def test_execute_exception_resets_connection(self, mock_prepare):
