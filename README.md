@@ -15,6 +15,7 @@ Key features include:
 - **Asynchronous Execution**: Run multiple queries concurrently for optimal performance.
 - **Persistent Connections**: Automatically reconnect to databases if the connection is dropped.
 - **Configuration via YAML**: Easily configure which metrics to export and which databases to connect using YAML files.
+- **Label Sanitization**: Clean DB-sourced label values so they contain only letters, numbers, and underscores. Any character outside `[A-Za-z0-9_]` (e.g., spaces, hyphens, slashes) is replaced with `_`, and values longer than 100 characters are trimmed.
 
 # Changes from db2dexpo
 

@@ -15,6 +15,49 @@ from db2Prom.db2 import Db2Connection
 from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR
 from db2Prom.connection_pool import ConnectionPool
 
+# Maximum length for a Prometheus label value
+MAX_LABEL_LENGTH = 100
+
+# Precompiled regex to replace illegal characters in label values
+_LABEL_CLEAN_RE = re.compile(r"[^a-zA-Z0-9_]")
+
+
+def sanitize_label_value(value, max_length: int = MAX_LABEL_LENGTH) -> str:
+    """Sanitize a label value for Prometheus metrics.
+
+    Parameters
+    ----------
+    value : Any
+        The value to sanitize. If ``None`` or cannot be converted to a string,
+        ``INVALID_LABEL_STR`` is returned.
+    max_length : int, optional
+        Maximum length of the resulting string. Longer values are trimmed.
+
+    Returns
+    -------
+    str
+        A sanitized label value containing only alphanumeric characters and
+        underscores, truncated to ``max_length``. If the value cannot be
+        sanitized, ``INVALID_LABEL_STR`` is returned.
+    """
+
+    if value is None:
+        return INVALID_LABEL_STR
+
+    try:
+        value_str = str(value)
+    except Exception:
+        return INVALID_LABEL_STR
+
+    sanitized = _LABEL_CLEAN_RE.sub("_", value_str)
+    if not sanitized:
+        return INVALID_LABEL_STR
+
+    if len(sanitized) > max_length:
+        sanitized = sanitized[:max_length]
+
+    return sanitized
+
 def setup_logging(log_path, log_level):
     """
     Set up logging with rotating file handlers.
@@ -136,10 +179,17 @@ async def query_set(config_connection, pool, config_query, exporter, default_tim
                     for row in res:
                         g_labels_aux = g_labels.copy()
                         for k, v in g_labels_aux.items():
-                            g_label_index = int(re.match(r'^\$(\d+)$', v).group(1)) - 1 if re.match(r'^\$(\d+)$', v) else 0
-                            g_labels_aux[k] = (
-                                row[g_label_index] if row and len(row) >= g_label_index else INVALID_LABEL_STR
+                            g_label_index = (
+                                int(re.match(r'^\$(\d+)$', v).group(1)) - 1
+                                if re.match(r'^\$(\d+)$', v)
+                                else 0
                             )
+                            raw_value = (
+                                row[g_label_index]
+                                if row and len(row) > g_label_index
+                                else None
+                            )
+                            g_labels_aux[k] = sanitize_label_value(raw_value)
                         labels = g_labels_aux | c_labels
                         if row and len(row) >= col:
                             exporter.set_gauge(g["name"], row[col], labels)
