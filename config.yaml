@@ -109,10 +109,22 @@ queries:
       - name: "db2_total_log_used"
         desc: "Total log space used in KB"
         col: 1
-        
+
       - name: "db2_total_log_available"
         desc: "Total log space available in KB"
         col: 2
+
+  - name: "DB2 Start Time"
+    runs_on: []
+    time_interval: 60
+    query: |
+      SELECT
+        UNIX_TIMESTAMP(DB2START_TIME) AS start_time
+      FROM TABLE (MON_GET_INSTANCE(-2))
+    gauges:
+      - name: "db2_up_since_seconds"
+        desc: "Unix timestamp when the DB2 instance started"
+        col: 1
 
 connections:
   - db_host: "192.168.50.253"
