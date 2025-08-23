@@ -342,12 +342,6 @@ def start_prometheus_exporter(config_queries, max_conn_labels, port):
             "Unix timestamp of the last successful DB2 query execution",
             ["query"],
         )
-        # Gauge to track query timeouts
-        custom_exporter.create_gauge(
-            "db2_query_timeout",
-            "Indicates that a query execution has timed out (1 = timeout)",
-            ["query"],
-        )
         custom_exporter.create_counter(
             "db2_query_failures_total",
             "Total number of DB2 query execution failures",

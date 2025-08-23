@@ -26,9 +26,27 @@ class TestCustomExporter(unittest.TestCase):
 
         # Set the gauge value
         exporter.set_gauge("test_gauge", 42, {"label1": "value1", "label2": "value2"})
+        # Verify the gauge value was set
+        value = (
+            exporter.metric_dict["test_gauge"]
+            .labels(label1="value1", label2="value2")
+            ._value.get()
+        )
+        self.assertEqual(value, 42)
 
-        # Verify the gauge value was set (requires mocking Prometheus internals)
-        # This test assumes the gauge.set() method works as expected.
+    def test_query_timeout_gauge_exists_and_updates(self):
+        """Default timeout gauge should be created and allow updates."""
+        exporter = CustomExporter(query_names=["q1"])
+
+        # Gauge created in the constructor
+        self.assertIn("db2_query_timeout", exporter.metric_dict)
+
+        # Update the gauge and verify the value
+        exporter.set_gauge("db2_query_timeout", 1, {"query": "q1"})
+        value = (
+            exporter.metric_dict["db2_query_timeout"].labels(query="q1")._value.get()
+        )
+        self.assertEqual(value, 1)
 
     @patch('db2Prom.prometheus.start_http_server')
     @patch('db2Prom.prometheus.socket.gethostname', return_value='test-host')
