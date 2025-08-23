@@ -1,4 +1,8 @@
-from prometheus_client import start_http_server, Gauge, REGISTRY
+from prometheus_client import (
+    start_http_server,
+    Gauge,
+    CollectorRegistry,
+)
 import logging
 import socket
 import time
@@ -32,29 +36,22 @@ class CustomExporter:
         self.metric_dict: dict[str, Gauge] = {}
         self.port = port
         self.host = host or socket.gethostname()
+        # Use a dedicated registry so metrics from different exporter instances
+        # do not conflict with each other.
+        self.registry = CollectorRegistry()
         self.query_last_success: dict[str, float] = {}
 
-        # Check if the metric already exists before creating it
-        if "db2_connection_status" not in REGISTRY._names_to_collectors:
-            self.create_gauge(
-                "db2_connection_status",
-                "Indicates whether the DB2 database is reachable (1 = reachable, 0 = unreachable)",
-            )
-        else:
-            self.metric_dict["db2_connection_status"] = REGISTRY._names_to_collectors[
-                "db2_connection_status"
-            ]
+        # Create default metrics
+        self.create_gauge(
+            "db2_connection_status",
+            "Indicates whether the DB2 database is reachable (1 = reachable, 0 = unreachable)",
+        )
 
-        if "db2_query_timeout" not in REGISTRY._names_to_collectors:
-            self.create_gauge(
-                "db2_query_timeout",
-                "Indicates that a query execution has timed out (1 = timeout)",
-                ["query"],
-            )
-        else:
-            self.metric_dict["db2_query_timeout"] = REGISTRY._names_to_collectors[
-                "db2_query_timeout"
-            ]
+        self.create_gauge(
+            "db2_query_timeout",
+            "Indicates that a query execution has timed out (1 = timeout)",
+            ["query"],
+        )
 
         # Initialize cache for each configured query
         if query_names:
@@ -71,12 +68,17 @@ class CustomExporter:
         metric_labels = metric_labels or []
         try:
             if metric_labels:
-                self.metric_dict[metric_name] = Gauge(
-                    metric_name, metric_desc, metric_labels
+                gauge = Gauge(
+                    metric_name, metric_desc, metric_labels, registry=self.registry
                 )
             else:
-                self.metric_dict[metric_name] = Gauge(metric_name, metric_desc)
+                gauge = Gauge(metric_name, metric_desc, registry=self.registry)
+            self.metric_dict[metric_name] = gauge
             logger.info(f"[GAUGE] [{metric_name}] created")
+        except ValueError as e:
+            # If a metric with the same name was already registered in this
+            # registry, simply reuse the existing one instead of failing.
+            logger.warning(f"[GAUGE] [{metric_name}] already exists: {e}")
         except Exception as e:
             logger.error(f"[GAUGE] [{metric_name}] failed to create: {e}")
 
@@ -108,7 +110,7 @@ class CustomExporter:
         """Start the Prometheus HTTP server."""
         try:
             # Start HTTP server on specified port and host
-            start_http_server(self.port, addr=self.host)
+            start_http_server(self.port, addr=self.host, registry=self.registry)
             logger.info(f"Db2Prom server started at {self.host}:{self.port}")
         except Exception as e:
             logger.fatal(
