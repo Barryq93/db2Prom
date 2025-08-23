@@ -61,13 +61,19 @@ class CustomExporter:
             for q in query_names:
                 self.query_last_success[q] = 0.0
 
-    def create_gauge(self, metric_name: str, metric_desc: str, metric_labels: list = []):
-        """
-        Create a new Prometheus gauge metric.
-        """
+    def create_gauge(
+        self,
+        metric_name: str,
+        metric_desc: str,
+        metric_labels: list | None = None,
+    ):
+        """Create a new Prometheus gauge metric."""
+        metric_labels = metric_labels or []
         try:
             if metric_labels:
-                self.metric_dict[metric_name] = Gauge(metric_name, metric_desc, metric_labels)
+                self.metric_dict[metric_name] = Gauge(
+                    metric_name, metric_desc, metric_labels
+                )
             else:
                 self.metric_dict[metric_name] = Gauge(metric_name, metric_desc)
             logger.info(f"[GAUGE] [{metric_name}] created")
