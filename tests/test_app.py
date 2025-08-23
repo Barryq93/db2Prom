@@ -5,6 +5,7 @@ import types
 from unittest.mock import patch, MagicMock, mock_open, AsyncMock
 import os
 import logging
+import copy
 
 import app as app_module
 # Minimal stubs for external dependencies so tests run without optional packages
@@ -162,6 +163,15 @@ class TestApp(unittest.TestCase):
         self.assertEqual(sanitized["global_config"]["password"], "******")
         # Original config should remain unchanged
         self.assertEqual(config["connections"][0]["db_passwd"], "secret")
+
+    def test_sanitize_config_does_not_mutate_original(self):
+        config = {
+            "connections": [{"db_user": "u", "db_passwd": "secret"}],
+            "global_config": {"password": "another", "foo": "bar"},
+        }
+        original = copy.deepcopy(config)
+        sanitize_config(config)
+        self.assertEqual(config, original)
 
     def test_sanitize_label_value(self):
         # Replaces illegal characters and trims long strings

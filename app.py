@@ -8,7 +8,6 @@ import yaml
 import logging
 import asyncio
 import re
-import copy
 import random
 import time
 from logging.handlers import RotatingFileHandler
@@ -287,17 +286,22 @@ def load_config_yaml(file_str):
         sys.exit(1)
 
 def sanitize_config(config):
+    """Return a copy of the configuration with password fields masked.
+
+    The original configuration is not modified.
     """
-    Return a deep copy of the configuration with password fields masked.
-    """
+
     def mask(item):
         if isinstance(item, dict):
-            return {k: ('******' if 'pass' in k.lower() else mask(v)) for k, v in item.items()}
+            sanitized = {}
+            for k, v in item.items():
+                sanitized[k] = "******" if "pass" in k.lower() else mask(v)
+            return sanitized
         if isinstance(item, list):
             return [mask(i) for i in item]
         return item
 
-    return mask(copy.deepcopy(config))
+    return mask(config)
 
 def get_labels_list(config_connections):
     """
