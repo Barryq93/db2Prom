@@ -1,8 +1,16 @@
 import unittest
-from unittest.mock import patch, MagicMock, mock_open
+import asyncio
+from unittest.mock import patch, MagicMock, mock_open, AsyncMock
 import os
 import logging
-from app import setup_logging, db2_instance_connection, load_config_yaml, sanitize_config
+from app import (
+    setup_logging,
+    db2_instance_connection,
+    load_config_yaml,
+    sanitize_config,
+    sanitize_label_value,
+    query_set,
+)
 from db2Prom.db2 import Db2Connection
 
 class TestApp(unittest.TestCase):
@@ -105,6 +113,41 @@ class TestApp(unittest.TestCase):
         self.assertEqual(sanitized["global_config"]["password"], "******")
         # Original config should remain unchanged
         self.assertEqual(config["connections"][0]["db_passwd"], "secret")
+
+    def test_sanitize_label_value(self):
+        # Replaces illegal characters and trims long strings
+        raw = "inv@lid label!!" + "x" * 200
+        sanitized = sanitize_label_value(raw)
+        self.assertTrue(sanitized.startswith("inv_lid_label__"))
+        self.assertLessEqual(len(sanitized), 100)
+
+        # None or unsanitizable values fall back to INVALID_LABEL_STR
+        self.assertEqual(sanitize_label_value(None), "-")
+
+    @patch('app.asyncio.sleep', side_effect=asyncio.CancelledError)
+    def test_query_set_sanitizes_db_labels(self, _):
+        exporter = MagicMock()
+        pool = MagicMock()
+        conn = MagicMock()
+        conn.connect = MagicMock()
+        conn.execute = AsyncMock(return_value=[(1, "bad label!!")])
+        pool.acquire = AsyncMock(return_value=conn)
+        pool.release = MagicMock()
+
+        config_connection = {"db_host": "h", "db_port": "p", "db_name": "n"}
+        config_query = {
+            "name": "q",
+            "query": "sql",
+            "gauges": [{"name": "m", "col": 1, "extra_labels": {"lbl": "$2"}}],
+        }
+
+        with self.assertRaises(asyncio.CancelledError):
+            asyncio.run(query_set(config_connection, pool, config_query, exporter, 1))
+
+        exporter.set_gauge.assert_called_once()
+        args, _ = exporter.set_gauge.call_args
+        labels = args[2]
+        self.assertEqual(labels["lbl"], sanitize_label_value("bad label!!"))
 
 if __name__ == '__main__':
     unittest.main()
