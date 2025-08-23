@@ -94,6 +94,9 @@ machines can use that hostname to scrape the metrics endpoint.
 
 Set DB2DEXPO_LOG_LEVEL to DEBUG to show query executions and metric updates.
 
+Console logging can be disabled by setting `log_console: false` in the
+`global_config` section of `config.yaml`.
+
 Example output of application startup:
 
 ```text

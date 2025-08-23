@@ -3,6 +3,7 @@ global_config:
   retry_conn_interval: 60
   default_time_interval: 15
   log_path: "logs/"
+  log_console: true
   port: 9844
 
 queries:

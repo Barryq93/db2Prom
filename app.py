@@ -59,9 +59,9 @@ def sanitize_label_value(value, max_length: int = MAX_LABEL_LENGTH) -> str:
 
     return sanitized
 
-def setup_logging(log_path, log_level):
+def setup_logging(log_path, log_level, log_console=True):
     """
-    Set up logging with rotating file handlers.
+    Set up logging with rotating file handlers and optional console output.
     """
     # Create log directory if it doesn't exist
     os.makedirs(log_path, exist_ok=True)
@@ -83,6 +83,12 @@ def setup_logging(log_path, log_level):
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(formatter)
     logger.addHandler(error_handler)
+
+    # Optional console handler
+    if log_console:
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
 
 def db2_instance_connection(config_connection, exporter):
     """
@@ -387,10 +393,11 @@ if __name__ == '__main__':
         log_path = global_config.get("log_path", "/path/to/logs/")
         port = global_config.get("port", 9844)
         retry_conn_interval = global_config.get("retry_conn_interval", 60)  # Default to 60 if not explicitly set
+        log_console = global_config.get("log_console", True)
         logging.info(f"Retry connection interval: {retry_conn_interval}")  # Logging retry connection interval
-        
+
         # Setup logging configuration
-        setup_logging(log_path, log_level)
+        setup_logging(log_path, log_level, log_console)
         logging.info("Configuration file loaded successfully.")
 
         # Validate global configuration variables
