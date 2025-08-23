@@ -16,6 +16,7 @@ ibm_db_mock = types.SimpleNamespace(
     prepare=MagicMock(),
     execute=MagicMock(),
     fetch_tuple=MagicMock(),
+    free_stmt=MagicMock(),
     close=MagicMock(),
 )
 sys.modules.setdefault("ibm_db", ibm_db_mock)
@@ -61,10 +62,11 @@ class TestDb2Connection(unittest.TestCase):
         self.assertIsNone(db2_conn.conn)
         mock_exporter.set_gauge.assert_called_with("db2_connection_status", 0)
 
-    @patch('ibm_db.prepare')
-    @patch('ibm_db.execute')
+    @patch('ibm_db.free_stmt')
     @patch('ibm_db.fetch_tuple')
-    def test_execute_query(self, mock_fetch_tuple, mock_execute, mock_prepare):
+    @patch('ibm_db.execute')
+    @patch('ibm_db.prepare')
+    def test_execute_query(self, mock_prepare, mock_execute, mock_fetch_tuple, mock_free_stmt):
         """Test that a SQL query is executed successfully."""
         mock_prepare.return_value = "mock_statement"
         mock_execute.return_value = True
@@ -92,11 +94,13 @@ class TestDb2Connection(unittest.TestCase):
 
         result = asyncio.run(run())
         self.assertEqual(result, [[1, "data"]])
+        mock_free_stmt.assert_called_once_with("mock_statement")
 
-    @patch('ibm_db.prepare')
-    @patch('ibm_db.execute')
+    @patch('ibm_db.free_stmt')
     @patch('ibm_db.fetch_tuple')
-    def test_execute_query_max_rows(self, mock_fetch_tuple, mock_execute, mock_prepare):
+    @patch('ibm_db.execute')
+    @patch('ibm_db.prepare')
+    def test_execute_query_max_rows(self, mock_prepare, mock_execute, mock_fetch_tuple, mock_free_stmt):
         """Test that max_rows limits the number of returned rows."""
         mock_prepare.return_value = "mock_statement"
         mock_execute.return_value = True
@@ -122,6 +126,35 @@ class TestDb2Connection(unittest.TestCase):
 
         result = asyncio.run(run())
         self.assertEqual(result, [[1, "data"]])
+        mock_free_stmt.assert_called_once_with("mock_statement")
+
+    @patch('ibm_db.free_stmt')
+    @patch('ibm_db.fetch_tuple')
+    @patch('ibm_db.execute')
+    @patch('ibm_db.prepare')
+    def test_execute_query_exception_calls_free_stmt(self, mock_prepare, mock_execute, mock_fetch_tuple, mock_free_stmt):
+        """Ensure free_stmt is called even when fetch raises an exception."""
+        mock_prepare.return_value = "mock_statement"
+        mock_execute.return_value = True
+        mock_fetch_tuple.side_effect = Exception("fetch failed")
+        mock_exporter = MagicMock()
+        db2_conn = Db2Connection(
+            db_name="test_db",
+            db_hostname="localhost",
+            db_port="50000",
+            db_user="user",
+            db_passwd="pass",
+            exporter=mock_exporter,
+        )
+        db2_conn.conn = "mock_connection"
+
+        async def run():
+            async for _ in db2_conn.execute("SELECT * FROM table", "test_query"):
+                pass
+
+        with self.assertRaises(Exception):
+            asyncio.run(run())
+        mock_free_stmt.assert_called_once_with("mock_statement")
 
     @patch('ibm_db.prepare')
     @patch('ibm_db.execute')

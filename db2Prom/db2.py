@@ -68,6 +68,7 @@ class Db2Connection:
             errors: list[Exception] = []
 
             def run_query():
+                stmt = None
                 try:
                     stmt = ibm_db.prepare(self.conn, query)
                     if params is not None:
@@ -85,6 +86,8 @@ class Db2Connection:
                 except Exception as exc:  # Capture exceptions from thread
                     errors.append(exc)
                 finally:
+                    if stmt is not None:
+                        ibm_db.free_stmt(stmt)
                     loop.call_soon_threadsafe(queue.put_nowait, sentinel)
 
             future = loop.run_in_executor(None, run_query)
