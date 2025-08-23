@@ -16,6 +16,7 @@ Key features include:
 - **Persistent Connections**: Automatically reconnect to databases if the connection is dropped.
 - **Configuration via YAML**: Easily configure which metrics to export and which databases to connect using YAML files.
 - **Row Limiting**: Prevent runaway result sets by capping rows per query with an optional `max_rows` setting.
+- **Parameterized Queries**: Safely pass parameters to SQL statements using bound placeholders.
 - **Label Sanitization**: Clean DB-sourced label values so they contain only letters, numbers, and underscores. Any character outside `[A-Za-z0-9_]` (e.g., spaces, hyphens, slashes) is replaced with `_`, and values longer than 100 characters are trimmed.
 
 # Changes from db2dexpo
@@ -73,12 +74,16 @@ pip3 install -r requirements.txt
 Check [the example config YAML](config.example.yaml) on how to handle multiple databases with different access. Each query can optionally include a `max_rows` field to cap the number of rows processed:
 
 ```yaml
-- name: "Applications count"
+- name: "Employee count"
   time_interval: 15
   max_rows: 100
   query: |
-    SELECT ...
+    SELECT COUNT(*) FROM employees WHERE department = ?
+  params:
+    - "SALES"
 ```
+
+The values listed under `params` are bound to the `?` placeholders in the SQL statement.
 
 Use this example YAML to also make your own `config.yaml` file, with your queries and gauge metrics.
 

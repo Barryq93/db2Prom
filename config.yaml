@@ -28,6 +28,20 @@ queries:
         extra_labels:
           time: "seconds"
 
+  - name: "Employees in department"
+    runs_on: []
+    time_interval: 15
+    query: |
+      SELECT COUNT(*)
+      FROM employees
+      WHERE department = ?
+    params:
+      - "SALES"
+    gauges:
+      - name: "db2_employees_in_dept"
+        desc: "Employees in a department"
+        col: 1
+
   - name: "Applications count"
     runs_on: []
     time_interval: 15
