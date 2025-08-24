@@ -4,11 +4,24 @@ import ibm_db
 import logging
 import asyncio
 import contextlib
+import concurrent.futures
+import time
 from typing import AsyncIterator
 
 logger = logging.getLogger(__name__)
 
 APPLICATION_NAME = "DB2PROM"
+
+# Maximum number of rows buffered between the worker thread and the async
+# consumer. Can be overridden at runtime via ``app.py`` after loading the
+# configuration.
+DEFAULT_QUEUE_SIZE = 1000
+
+# When the queue is full, the worker thread will retry putting a row for up to
+# this many attempts, waiting ``QUEUE_PUT_TIMEOUT`` seconds for each attempt
+# before giving up and discarding the row.
+QUEUE_PUT_TIMEOUT = 1.0
+QUEUE_PUT_MAX_RETRIES = 3
 
 class Db2Connection:
     def __init__(self, db_name: str, db_hostname: str, db_port: str, db_user: str, db_passwd: str, exporter):
@@ -68,12 +81,14 @@ class Db2Connection:
                 return
 
             loop = asyncio.get_running_loop()
-            queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+            queue: asyncio.Queue = asyncio.Queue(maxsize=DEFAULT_QUEUE_SIZE)
             sentinel = object()
             errors: list[Exception] = []
             stmt_holder: dict[str, object | None] = {"stmt": None}
+            rows_discarded = 0
 
             def run_query():
+                nonlocal rows_discarded
                 stmt = None
                 try:
                     stmt = ibm_db.prepare(self.conn, query)
@@ -84,11 +99,36 @@ class Db2Connection:
                         ibm_db.execute(stmt)
                     row_count = 0
                     row = ibm_db.fetch_tuple(stmt)
+
+                    def _put_row(item: list) -> bool:
+                        attempts = 0
+                        while True:
+                            fut = asyncio.run_coroutine_threadsafe(
+                                queue.put(item), loop
+                            )
+                            try:
+                                fut.result(timeout=QUEUE_PUT_TIMEOUT)
+                                return True
+                            except concurrent.futures.TimeoutError:
+                                fut.cancel()
+                                attempts += 1
+                                if attempts >= QUEUE_PUT_MAX_RETRIES:
+                                    return False
+                                time.sleep(0.01)
+                            except Exception as exc:  # pragma: no cover - unexpected
+                                errors.append(exc)
+                                return False
+
                     while row:
-                        loop.call_soon_threadsafe(queue.put_nowait, list(row))
-                        row_count += 1
-                        if max_rows is not None and row_count >= max_rows:
-                            break
+                        if _put_row(list(row)):
+                            row_count += 1
+                            if max_rows is not None and row_count >= max_rows:
+                                break
+                        else:
+                            rows_discarded += 1
+                            logger.warning(
+                                f"[{self.connection_string_print}] [{name}] discarding row due to queue limit"
+                            )
                         row = ibm_db.fetch_tuple(stmt)
                 except Exception as exc:  # Capture exceptions from thread
                     errors.append(exc)
@@ -98,7 +138,7 @@ class Db2Connection:
                             ibm_db.free_stmt(stmt)
                         finally:
                             stmt_holder["stmt"] = None
-                    loop.call_soon_threadsafe(queue.put_nowait, sentinel)
+                    asyncio.run_coroutine_threadsafe(queue.put(sentinel), loop).result()
 
             future = loop.run_in_executor(None, run_query)
 
@@ -145,6 +185,10 @@ class Db2Connection:
                     await future
             if errors:
                 raise errors[0]
+            if rows_discarded:
+                logger.warning(
+                    f"[{self.connection_string_print}] [{name}] discarded {rows_discarded} rows due to queue limits"
+                )
 
             logger.debug(f"[{self.connection_string_print}] [{name}] executed")
         except Exception as e:

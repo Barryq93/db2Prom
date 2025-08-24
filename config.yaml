@@ -1,9 +1,10 @@
-global_config:
-  log_level: INFO
-  default_time_interval: 15
-  log_path: "logs/"
-  log_console: true
-  port: 9844
+  global_config:
+    log_level: INFO
+    default_time_interval: 15
+    log_path: "logs/"
+    log_console: true
+    port: 9844
+    queue_size: 1000
 
 queries:
   - name: "Lockwaits"
