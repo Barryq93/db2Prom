@@ -4,6 +4,7 @@ import time
 import sys
 import types
 from unittest.mock import patch, MagicMock
+import concurrent.futures
 
 # Provide a minimal mock for the ``ibm_db`` module so the tests can run
 # without the actual dependency being installed.
@@ -21,7 +22,7 @@ ibm_db_mock = types.SimpleNamespace(
 )
 sys.modules.setdefault("ibm_db", ibm_db_mock)
 
-from db2Prom.db2 import Db2Connection
+from db2Prom.db2 import Db2Connection, QUEUE_PUT_MAX_RETRIES
 from db2Prom.prometheus import CustomExporter
 
 
@@ -103,6 +104,57 @@ class TestDb2Connection(unittest.TestCase):
         result = asyncio.run(run())
         self.assertEqual(result, [[1, "data"]])
         mock_free_stmt.assert_called_once_with("mock_statement")
+
+    @patch('db2Prom.db2.logger')
+    @patch('db2Prom.db2.asyncio.run_coroutine_threadsafe')
+    @patch('ibm_db.fetch_tuple')
+    @patch('ibm_db.execute')
+    @patch('ibm_db.prepare')
+    def test_execute_logs_discarded_rows(
+        self,
+        mock_prepare,
+        mock_execute,
+        mock_fetch_tuple,
+        mock_run_coroutine,
+        mock_logger,
+    ):
+        """Rows dropped due to queue limits should be logged."""
+        mock_prepare.return_value = "stmt"
+        mock_execute.return_value = True
+        mock_fetch_tuple.side_effect = [[1], None]
+
+        call_count = {"n": 0}
+
+        def side_effect(coro, loop):
+            call_count["n"] += 1
+            fut = MagicMock()
+            if call_count["n"] <= QUEUE_PUT_MAX_RETRIES:
+                fut.result.side_effect = concurrent.futures.TimeoutError()
+            else:
+                fut.result.return_value = None
+            return fut
+
+        mock_run_coroutine.side_effect = side_effect
+
+        db2_conn = Db2Connection(
+            db_name="test_db",
+            db_hostname="localhost",
+            db_port="50000",
+            db_user="user",
+            db_passwd="pass",
+            exporter=MagicMock(),
+        )
+        db2_conn.conn = "conn"
+
+        async def run():
+            async for _ in db2_conn.execute("SELECT 1", "test_query"):
+                pass
+
+        asyncio.run(run())
+
+        warnings = [c.args[0] for c in mock_logger.warning.call_args_list]
+        self.assertTrue(any("discarding row" in w for w in warnings))
+        self.assertTrue(any("discarded 1 rows" in w for w in warnings))
 
     @patch('ibm_db.free_stmt')
     @patch('ibm_db.fetch_tuple')

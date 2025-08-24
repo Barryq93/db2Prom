@@ -11,9 +11,12 @@ import re
 import random
 import time
 from logging.handlers import RotatingFileHandler
-from db2Prom.db2 import Db2Connection
+import db2Prom.db2 as db2_module
 from db2Prom.prometheus import CustomExporter, INVALID_LABEL_STR
 from db2Prom.connection_pool import ConnectionPool
+
+# Expose Db2Connection for compatibility while avoiding duplicate imports
+Db2Connection = db2_module.Db2Connection
 
 
 class ConfigError(Exception):
@@ -491,6 +494,9 @@ if __name__ == '__main__':
         log_path = global_config.get("log_path", "/path/to/logs/")
         port = global_config.get("port", 9844)
         log_console = global_config.get("log_console", True)
+        db2_module.DEFAULT_QUEUE_SIZE = int(
+            global_config.get("queue_size", db2_module.DEFAULT_QUEUE_SIZE)
+        )
 
         # Setup logging configuration
         setup_logging(log_path, log_level, log_console)
