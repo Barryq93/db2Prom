@@ -1,4 +1,7 @@
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionPool:
@@ -24,11 +27,14 @@ class ConnectionPool:
 
     async def acquire(self):
         """Acquire a connection from the pool."""
-        return await self._queue.get()
+        conn = await self._queue.get()
+        logger.debug("Acquired connection from pool")
+        return conn
 
     def release(self, conn):
         """Return a connection to the pool."""
         self._queue.put_nowait(conn)
+        logger.debug("Released connection back to pool")
 
     async def close(self):
         """Close all connections currently in the pool."""
@@ -36,7 +42,8 @@ class ConnectionPool:
             conn = await self._queue.get()
             try:
                 conn.close()
-            finally:
-                # Ensure the connection isn't reused after closing
-                pass
+                logger.debug("Closed connection from pool")
+            except Exception:
+                logger.exception("Failed to close connection from pool")
+        logger.info("Connection pool closed")
 
